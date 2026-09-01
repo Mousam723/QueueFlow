@@ -17,3 +17,15 @@ target/
 .env
 .env.*
 application-local.properties
+# macOS
+.DS_Store
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Maven
+target/
