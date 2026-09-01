@@ -4,8 +4,7 @@ import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.queue.service.QueueService;
 
-import jakarta.validation.Valid;
-
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,7 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/businesses/{businessId}/queues")
+@RequestMapping("/api/v1")
 public class QueueController {
 
     private final QueueService queueService;
@@ -22,26 +21,61 @@ public class QueueController {
         this.queueService = queueService;
     }
 
-    @PostMapping
+    @PostMapping("/businesses/{businessId}/queues")
     @ResponseStatus(HttpStatus.CREATED)
     public QueueResponse createQueue(
             @PathVariable Long businessId,
-            @Valid @RequestBody CreateQueueRequest request) {
+            @RequestBody CreateQueueRequest request) {
 
-        return queueService.createQueue(
-                businessId,
-                request
-        );
+        return queueService.createQueue(businessId, request);
     }
 
-    @GetMapping
+    @GetMapping("/businesses/{businessId}/queues")
     public List<QueueResponse> getBusinessQueues(
             @PathVariable Long businessId,
-            @RequestParam(required = false) LocalDate date) {
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate date) {
 
-        return queueService.getBusinessQueues(
-                businessId,
-                date
-        );
+        return queueService.getBusinessQueues(businessId, date);
+    }
+
+    @GetMapping("/queues/{queueId}")
+    public QueueResponse getQueue(
+            @PathVariable Long queueId) {
+
+        return queueService.getQueue(queueId);
+    }
+
+    @PostMapping("/queues/{queueId}/next")
+    @ResponseStatus(HttpStatus.OK)
+    public QueueResponse advanceQueue(
+            @PathVariable Long queueId) {
+
+        return queueService.advanceQueue(queueId);
+    }
+
+    @PostMapping("/queues/{queueId}/pause")
+    @ResponseStatus(HttpStatus.OK)
+    public QueueResponse pauseQueue(
+            @PathVariable Long queueId) {
+
+        return queueService.pauseQueue(queueId);
+    }
+
+    @PostMapping("/queues/{queueId}/resume")
+    @ResponseStatus(HttpStatus.OK)
+    public QueueResponse resumeQueue(
+            @PathVariable Long queueId) {
+
+        return queueService.resumeQueue(queueId);
+    }
+
+    @PostMapping("/queues/{queueId}/close")
+    @ResponseStatus(HttpStatus.OK)
+    public QueueResponse closeQueue(
+            @PathVariable Long queueId) {
+
+        return queueService.closeQueue(queueId);
     }
 }

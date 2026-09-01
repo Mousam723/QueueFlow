@@ -94,13 +94,30 @@ public class QueueService {
     @Transactional(readOnly = true)
     public QueueResponse getQueue(Long queueId) {
 
+        return QueueResponse.from(getQueueEntity(queueId));
+    }
+
+    @Transactional
+    public QueueResponse advanceQueue(Long queueId) {
+
         Queue queue = queueRepository.findById(queueId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Queue with id " + queueId + " was not found"
                         ));
 
-        return QueueResponse.from(queue);
+        if (queue.getStatus() != QueueStatus.ACTIVE) {
+            throw new ConflictException(
+                    "Queue with id " + queueId
+                            + " is not active"
+            );
+        }
+
+        queue.setCurrentToken(queue.getCurrentToken() + 1);
+
+        Queue savedQueue = queueRepository.save(queue);
+
+        return QueueResponse.from(savedQueue);
     }
 
     @Transactional(readOnly = true)
@@ -123,5 +140,64 @@ public class QueueService {
                 .stream()
                 .map(QueueResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public QueueResponse pauseQueue(Long queueId) {
+
+        Queue queue = getQueueEntity(queueId);
+
+        if (queue.getStatus() != QueueStatus.ACTIVE) {
+            throw new ConflictException(
+                    "Queue with id " + queueId + " cannot be paused from status "
+                            + queue.getStatus()
+            );
+        }
+
+        queue.setStatus(QueueStatus.PAUSED);
+
+        return QueueResponse.from(queueRepository.save(queue));
+    }
+
+    @Transactional
+    public QueueResponse resumeQueue(Long queueId) {
+
+        Queue queue = getQueueEntity(queueId);
+
+        if (queue.getStatus() != QueueStatus.PAUSED) {
+            throw new ConflictException(
+                    "Queue with id " + queueId + " cannot be resumed from status "
+                            + queue.getStatus()
+            );
+        }
+
+        queue.setStatus(QueueStatus.ACTIVE);
+
+        return QueueResponse.from(queueRepository.save(queue));
+    }
+
+    @Transactional
+    public QueueResponse closeQueue(Long queueId) {
+
+        Queue queue = getQueueEntity(queueId);
+
+        if (queue.getStatus() == QueueStatus.CLOSED) {
+            throw new ConflictException(
+                    "Queue with id " + queueId + " is already closed"
+            );
+        }
+
+        queue.setStatus(QueueStatus.CLOSED);
+
+        return QueueResponse.from(queueRepository.save(queue));
+    }
+
+    private Queue getQueueEntity(Long queueId) {
+
+        return queueRepository.findById(queueId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Queue with id " + queueId + " was not found"
+                        ));
     }
 }
