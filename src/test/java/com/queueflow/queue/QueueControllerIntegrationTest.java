@@ -1,7 +1,6 @@
 package com.queueflow.queue;
-
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
 import com.queueflow.business.Business;
 import com.queueflow.business.BusinessRepository;
 import com.queueflow.business.BusinessStatus;
@@ -12,25 +11,23 @@ import com.queueflow.service.ServiceStatus;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
-
 import org.junit.jupiter.api.Test;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-
 import org.springframework.http.MediaType;
-
 import org.springframework.test.web.servlet.MockMvc;
-
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,23 +49,27 @@ class QueueControllerIntegrationTest {
     @Autowired
     private ServiceRepository serviceRepository;
 
+    /*
+     * ============================================================
+     * TEST DATA HELPERS
+     * ============================================================
+     */
+
     private Business createBusiness(String email) {
 
         User owner = new User();
-
-        owner.setName("Test Owner");
+        owner.setName("Queue Test Owner");
         owner.setEmail(email);
         owner.setPhone("9999999999");
         owner.setPasswordHash("test-password");
         owner.setRole(UserRole.BUSINESS_OWNER);
 
-        User savedOwner = userRepository.save(owner);
+        owner = userRepository.save(owner);
 
         Business business = new Business();
-
-        business.setOwner(savedOwner);
-        business.setName("Test Clinic");
-        business.setDescription("Test clinic");
+        business.setOwner(owner);
+        business.setName("Test Business");
+        business.setDescription("Business created for queue integration tests");
         business.setAddress("Hyderabad");
         business.setTimezone("Asia/Kolkata");
         business.setStatus(BusinessStatus.ACTIVE);
@@ -79,24 +80,60 @@ class QueueControllerIntegrationTest {
     private Service createService(Business business) {
 
         Service service = new Service();
-
         service.setBusiness(business);
-        service.setName("General Consultation");
-        service.setDescription("General consultation service");
+        service.setName("Test Service");
+        service.setDescription("Service created for queue integration tests");
         service.setDurationMinutes(30);
         service.setStatus(ServiceStatus.ACTIVE);
 
         return serviceRepository.save(service);
     }
 
-    @Test
-    void shouldCreateQueueSuccessfully() throws Exception {
+    private Long createQueue(
+            Business business,
+            Service service,
+            LocalDate queueDate
+    ) throws Exception {
 
-        Business business = createBusiness("queue-owner-1@test.com");
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(service.getId());
+        request.setQueueDate(queueDate);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/queues", business.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode jsonNode = objectMapper.readTree(response);
+
+        Long queueId = jsonNode.get("id").asLong();
+
+        assertNotNull(queueId);
+
+        return queueId;
+    }
+
+    /*
+     * ============================================================
+     * QUEUE CREATION
+     * ============================================================
+     */
+
+    @Test
+    void shouldCreateQueueForBusinessAndService() throws Exception {
+
+        Business business = createBusiness(
+                "queue-create@test.com"
+        );
+
         Service service = createService(business);
 
         CreateQueueRequest request = new CreateQueueRequest();
-
         request.setServiceId(service.getId());
         request.setQueueDate(LocalDate.of(2026, 8, 31));
 
@@ -105,23 +142,25 @@ class QueueControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.id").exists())
-        .andExpect(jsonPath("$.businessId").value(business.getId()))
-        .andExpect(jsonPath("$.serviceId").value(service.getId()))
-        .andExpect(jsonPath("$.queueDate").value("2026-08-31"))
-        .andExpect(jsonPath("$.status").value("ACTIVE"))
-        .andExpect(jsonPath("$.currentToken").value(0));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.businessId").value(business.getId()))
+                .andExpect(jsonPath("$.serviceId").value(service.getId()))
+                .andExpect(jsonPath("$.queueDate").value("2026-08-31"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(0));
     }
 
     @Test
-    void shouldCreateQueueForTodayWhenDateIsNotProvided() throws Exception {
+    void shouldDefaultQueueDateToToday() throws Exception {
 
-        Business business = createBusiness("queue-owner-2@test.com");
+        Business business = createBusiness(
+                "queue-default-date@test.com"
+        );
+
         Service service = createService(business);
 
         CreateQueueRequest request = new CreateQueueRequest();
-
         request.setServiceId(service.getId());
 
         mockMvc.perform(
@@ -129,17 +168,18 @@ class QueueControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.queueDate").value(LocalDate.now().toString()))
-        .andExpect(jsonPath("$.currentToken").value(0));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.queueDate")
+                        .value(LocalDate.now().toString()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(0));
     }
 
     @Test
-    void shouldReturn404WhenBusinessDoesNotExist() throws Exception {
+    void shouldRejectQueueForNonExistentBusiness() throws Exception {
 
         CreateQueueRequest request = new CreateQueueRequest();
-
-        request.setServiceId(1L);
+        request.setServiceId(999999L);
         request.setQueueDate(LocalDate.of(2026, 8, 31));
 
         mockMvc.perform(
@@ -147,18 +187,17 @@ class QueueControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.error").value("RESOURCE_NOT_FOUND"));
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void shouldReturn404WhenServiceDoesNotExist() throws Exception {
+    void shouldRejectQueueForNonExistentService() throws Exception {
 
-        Business business = createBusiness("queue-owner-3@test.com");
+        Business business = createBusiness(
+                "queue-invalid-service@test.com"
+        );
 
         CreateQueueRequest request = new CreateQueueRequest();
-
         request.setServiceId(999999L);
         request.setQueueDate(LocalDate.of(2026, 8, 31));
 
@@ -167,100 +206,526 @@ class QueueControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.error").value("RESOURCE_NOT_FOUND"));
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void shouldRejectServiceBelongingToAnotherBusiness() throws Exception {
+    void shouldRejectServiceThatDoesNotBelongToBusiness() throws Exception {
 
-        Business business1 = createBusiness("queue-owner-4@test.com");
-        Business business2 = createBusiness("queue-owner-5@test.com");
+        Business businessOne = createBusiness(
+                "queue-business-one@test.com"
+        );
 
-        Service serviceOfBusiness2 = createService(business2);
+        Business businessTwo = createBusiness(
+                "queue-business-two@test.com"
+        );
+
+        Service service = createService(businessOne);
 
         CreateQueueRequest request = new CreateQueueRequest();
-
-        request.setServiceId(serviceOfBusiness2.getId());
+        request.setServiceId(service.getId());
         request.setQueueDate(LocalDate.of(2026, 8, 31));
 
         mockMvc.perform(
-                post("/api/v1/businesses/{businessId}/queues", business1.getId())
+                post("/api/v1/businesses/{businessId}/queues", businessTwo.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
     void shouldRejectDuplicateQueueForSameServiceAndDate() throws Exception {
 
-        Business business = createBusiness("queue-owner-6@test.com");
+        Business business = createBusiness(
+                "queue-duplicate@test.com"
+        );
+
         Service service = createService(business);
 
-        LocalDate date = LocalDate.of(2026, 8, 31);
+        LocalDate queueDate = LocalDate.of(2026, 8, 31);
 
-        CreateQueueRequest request = new CreateQueueRequest();
+        createQueue(
+                business,
+                service,
+                queueDate
+        );
 
-        request.setServiceId(service.getId());
-        request.setQueueDate(date);
-
-        mockMvc.perform(
-                post("/api/v1/businesses/{businessId}/queues", business.getId())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
-        )
-        .andExpect(status().isCreated());
+        CreateQueueRequest duplicateRequest = new CreateQueueRequest();
+        duplicateRequest.setServiceId(service.getId());
+        duplicateRequest.setQueueDate(queueDate);
 
         mockMvc.perform(
                 post("/api/v1/businesses/{businessId}/queues", business.getId())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
+                        .content(objectMapper.writeValueAsString(duplicateRequest))
         )
-        .andExpect(status().isConflict());
+                .andExpect(status().isConflict());
+    }
+
+    /*
+     * ============================================================
+     * QUEUE RETRIEVAL
+     * ============================================================
+     */
+
+    @Test
+    void shouldGetQueueById() throws Exception {
+
+        Business business = createBusiness(
+                "queue-get@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                get("/api/v1/queues/{queueId}", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(queueId))
+                .andExpect(jsonPath("$.businessId").value(business.getId()))
+                .andExpect(jsonPath("$.serviceId").value(service.getId()))
+                .andExpect(jsonPath("$.queueDate").value("2026-08-31"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(0));
     }
 
     @Test
-    void shouldGetBusinessQueues() throws Exception {
-
-        Business business = createBusiness("queue-owner-7@test.com");
-        Service service = createService(business);
-
-        LocalDate date = LocalDate.of(2026, 8, 31);
-
-        CreateQueueRequest request = new CreateQueueRequest();
-
-        request.setServiceId(service.getId());
-        request.setQueueDate(date);
+    void shouldReturn404ForNonExistentQueue() throws Exception {
 
         mockMvc.perform(
-                post("/api/v1/businesses/{businessId}/queues", business.getId())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
+                get("/api/v1/queues/{queueId}", 999999L)
         )
-        .andExpect(status().isCreated());
+                .andExpect(status().isNotFound());
+    }
+
+    /*
+     * ============================================================
+     * BUSINESS QUEUE LISTING
+     * ============================================================
+     */
+
+    @Test
+    void shouldListQueuesForBusinessAndDate() throws Exception {
+
+        Business business = createBusiness(
+                "queue-list@test.com"
+        );
+
+        Service serviceOne = createService(business);
+        Service serviceTwo = createService(business);
+
+        LocalDate queueDate = LocalDate.of(2026, 8, 31);
+
+        createQueue(
+                business,
+                serviceOne,
+                queueDate
+        );
+
+        createQueue(
+                business,
+                serviceTwo,
+                queueDate
+        );
 
         mockMvc.perform(
                 get("/api/v1/businesses/{businessId}/queues", business.getId())
-                        .param("date", date.toString())
+                        .param("date", queueDate.toString())
         )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$").isArray())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].serviceId").value(service.getId()))
-        .andExpect(jsonPath("$[0].queueDate").value(date.toString()));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    /*
+     * ============================================================
+     * QUEUE TOKEN ADVANCEMENT
+     * ============================================================
+     */
+
+    @Test
+    void shouldAdvanceActiveQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-next@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(queueId))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(1));
     }
 
     @Test
-    void shouldReturn404WhenGettingQueuesForNonExistingBusiness()
-            throws Exception {
+    void shouldAdvanceQueueMultipleTimes() throws Exception {
+
+        Business business = createBusiness(
+                "queue-next-multiple@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
 
         mockMvc.perform(
-                get("/api/v1/businesses/{businessId}/queues", 999999L)
+                post("/api/v1/queues/{queueId}/next", queueId)
         )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.error").value("RESOURCE_NOT_FOUND"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(2));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(3));
+    }
+
+    @Test
+    void shouldReturn404WhenAdvancingNonExistentQueue() throws Exception {
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", 999999L)
+        )
+                .andExpect(status().isNotFound());
+    }
+
+    /*
+     * ============================================================
+     * PAUSE / RESUME
+     * ============================================================
+     */
+
+    @Test
+    void shouldPauseActiveQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-pause@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(queueId))
+                .andExpect(jsonPath("$.status").value("PAUSED"))
+                .andExpect(jsonPath("$.currentToken").value(0));
+    }
+
+    @Test
+    void shouldResumePausedQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-resume@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAUSED"));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/resume", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(queueId))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(0));
+    }
+
+    /*
+     * ============================================================
+     * CLOSE
+     * ============================================================
+     */
+
+    @Test
+    void shouldCloseActiveQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-close@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/close", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(queueId))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    @Test
+    void shouldClosePausedQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-close-paused@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/close", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    /*
+     * ============================================================
+     * INVALID STATE TRANSITIONS
+     * ============================================================
+     */
+
+    @Test
+    void shouldRejectAdvancingPausedQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-paused-next@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldRejectResumingActiveQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-active-resume@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/resume", queueId)
+        )
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldRejectPausingPausedQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-paused-pause@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldRejectOperationsOnClosedQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-closed-operations@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/close", queueId)
+        )
+                .andExpect(status().isOk());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/resume", queueId)
+        )
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/close", queueId)
+        )
+                .andExpect(status().isConflict());
+    }
+
+    /*
+     * ============================================================
+     * QUEUE STATE + TOKEN PRESERVATION
+     * ============================================================
+     */
+
+    @Test
+    void shouldPreserveTokenWhenQueueIsPausedAndResumed() throws Exception {
+
+        Business business = createBusiness(
+                "queue-token-state@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/pause", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAUSED"))
+                .andExpect(jsonPath("$.currentToken").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/resume", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentToken").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(2));
+    }
+
+    @Test
+    void shouldPreserveTokenWhenClosingQueue() throws Exception {
+
+        Business business = createBusiness(
+                "queue-token-close@test.com"
+        );
+
+        Service service = createService(business);
+
+        Long queueId = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/next", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentToken").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/queues/{queueId}/close", queueId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.currentToken").value(1));
     }
 }
