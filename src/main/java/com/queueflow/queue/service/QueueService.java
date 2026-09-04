@@ -97,27 +97,15 @@ public class QueueService {
         return QueueResponse.from(getQueueEntity(queueId));
     }
 
-    @Transactional
-    public QueueResponse advanceQueue(Long queueId) {
-
-        Queue queue = queueRepository.findById(queueId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Queue with id " + queueId + " was not found"
-                        ));
-
+    @Transactional 
+    public QueueResponse advanceQueue(Long queueId) { 
+        Queue queue = queueRepository.findByIdForUpdate(queueId) .orElseThrow(() -> new ResourceNotFoundException( "Queue with id " + queueId + " was not found" )); 
         if (queue.getStatus() != QueueStatus.ACTIVE) {
-            throw new ConflictException(
-                    "Queue with id " + queueId
-                            + " is not active"
-            );
-        }
-
-        queue.setCurrentToken(queue.getCurrentToken() + 1);
-
-        Queue savedQueue = queueRepository.save(queue);
-
-        return QueueResponse.from(savedQueue);
+             throw new ConflictException( "Queue with id " + queueId + " is not active" ); 
+        } 
+        queue.setCurrentToken(queue.getCurrentToken() + 1); 
+        Queue savedQueue = queueRepository.save(queue); 
+        return QueueResponse.from(savedQueue); 
     }
 
     @Transactional(readOnly = true)
