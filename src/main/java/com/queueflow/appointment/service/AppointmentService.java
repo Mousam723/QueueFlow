@@ -152,4 +152,31 @@ public AppointmentResponse completeAppointment(Long appointmentId) {
             appointmentRepository.save(appointment)
     );
 }
+
+@Transactional
+public AppointmentResponse cancelAppointment(Long appointmentId) {
+    Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId
+                            + " was not found"
+            ));
+
+    AppointmentStatus currentStatus = appointment.getStatus();
+
+    if (currentStatus != AppointmentStatus.WAITING
+            && currentStatus != AppointmentStatus.CALLED) {
+        throw new ConflictException(
+                "Appointment with id " + appointmentId
+                        + " cannot be cancelled from status "
+                        + currentStatus
+        );
+    }
+
+    appointment.setStatus(AppointmentStatus.CANCELLED);
+
+    return AppointmentResponse.from(
+            appointmentRepository.save(appointment)
+    );
+}
+
 }

@@ -50,4 +50,12 @@ public AppointmentResponse completeAppointment(
     return appointmentService.completeAppointment(appointmentId);
 }
 
+@PostMapping("/{appointmentId}/cancel")
+@ResponseStatus(HttpStatus.OK)
+public AppointmentResponse cancelAppointment(
+        @PathVariable Long appointmentId
+) {
+    return appointmentService.cancelAppointment(appointmentId);
+}
+
 }
