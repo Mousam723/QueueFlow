@@ -763,4 +763,182 @@ class QueueControllerIntegrationTest {
             executorService.shutdown();
         }
     }
+
+    @Test
+void shouldPauseActiveQueue() throws Exception {
+    Business business = createBusiness("queue-pause@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/pause", queueId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PAUSED"))
+            .andExpect(jsonPath("$.currentToken").value(0));
+}
+
+@Test
+void shouldResumePausedQueue() throws Exception {
+    Business business = createBusiness("queue-resume@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/pause", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/resume", queueId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("ACTIVE"));
+}
+
+@Test
+void shouldCloseActiveQueue() throws Exception {
+    Business business = createBusiness("queue-close@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/close", queueId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CLOSED"));
+}
+
+@Test
+void shouldRejectAdvancingPausedQueue() throws Exception {
+    Business business = createBusiness("queue-paused-next@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/pause", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/next", queueId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectAdvancingClosedQueue() throws Exception {
+    Business business = createBusiness("queue-closed-next@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/close", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/next", queueId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectPausingAlreadyPausedQueue() throws Exception {
+    Business business = createBusiness("queue-double-pause@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/pause", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/pause", queueId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectResumingActiveQueue() throws Exception {
+    Business business = createBusiness("queue-active-resume@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/resume", queueId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectResumingClosedQueue() throws Exception {
+    Business business = createBusiness("queue-closed-resume@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/close", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/resume", queueId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectClosingAlreadyClosedQueue() throws Exception {
+    Business business = createBusiness("queue-double-close@test.com");
+    Service service = createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/close", queueId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/close", queueId)
+    )
+            .andExpect(status().isConflict());
+}
 }
