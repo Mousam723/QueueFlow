@@ -82,4 +82,74 @@ public class AppointmentService {
 
         return AppointmentResponse.from(savedAppointment);
     }
+
+    @Transactional
+    public AppointmentResponse callAppointment(Long appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Appointment with id " + appointmentId
+                                + " was not found"
+                ));
+
+        if (appointment.getStatus() != AppointmentStatus.WAITING) {
+            throw new ConflictException(
+                    "Appointment with id " + appointmentId
+                            + " cannot be called from status "
+                            + appointment.getStatus()
+            );
+        }
+
+        appointment.setStatus(AppointmentStatus.CALLED);
+
+        return AppointmentResponse.from(
+                appointmentRepository.save(appointment)
+        );
+    }
+
+
+    @Transactional
+    public AppointmentResponse startAppointment(Long appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Appointment with id " + appointmentId
+                                + " was not found"
+                ));
+
+        if (appointment.getStatus() != AppointmentStatus.CALLED) {
+            throw new ConflictException(
+                    "Appointment with id " + appointmentId
+                            + " cannot be started from status "
+                            + appointment.getStatus()
+            );
+        }
+
+        appointment.setStatus(AppointmentStatus.IN_SERVICE);
+
+        return AppointmentResponse.from(
+                appointmentRepository.save(appointment)
+        );
+    }
+
+    @Transactional
+public AppointmentResponse completeAppointment(Long appointmentId) {
+    Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId
+                            + " was not found"
+            ));
+
+    if (appointment.getStatus() != AppointmentStatus.IN_SERVICE) {
+        throw new ConflictException(
+                "Appointment with id " + appointmentId
+                        + " cannot be completed from status "
+                        + appointment.getStatus()
+        );
+    }
+
+    appointment.setStatus(AppointmentStatus.COMPLETED);
+
+    return AppointmentResponse.from(
+            appointmentRepository.save(appointment)
+    );
+}
 }

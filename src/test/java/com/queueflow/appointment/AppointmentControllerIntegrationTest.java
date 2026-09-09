@@ -567,4 +567,429 @@ void shouldRejectAppointmentForNonCustomerUser() throws Exception {
     )
             .andExpect(status().isConflict());
 }
+
+@Test
+void shouldCallWaitingAppointment() throws Exception {
+    User customer = createCustomer("appointment-call@test.com");
+    Business business = createBusiness("appointment-call-business@test.com");
+    Service service = createService(business);
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String response = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createAppointmentRequest(
+                            customer.getId(),
+                            queue.getId()
+                    ))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long appointmentId = objectMapper
+            .readTree(response)
+            .get("id")
+            .asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call", appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(appointmentId))
+            .andExpect(jsonPath("$.status").value("CALLED"));
+}
+
+@Test
+void shouldRejectCallingAlreadyCalledAppointment() throws Exception {
+    User customer = createCustomer("appointment-double-call@test.com");
+    Business business = createBusiness("appointment-double-call-business@test.com");
+    Service service = createService(business);
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String response = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createAppointmentRequest(
+                            customer.getId(),
+                            queue.getId()
+                    ))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long appointmentId = objectMapper
+            .readTree(response)
+            .get("id")
+            .asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call", appointmentId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call", appointmentId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldReturnNotFoundWhenCallingMissingAppointment() throws Exception {
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call", 999999L)
+    )
+            .andExpect(status().isNotFound());
+}
+@Test
+void shouldStartCalledAppointment() throws Exception {
+    User customer = createCustomer(
+            "appointment-start@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-start-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CALLED"));
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/start",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(appointmentId))
+            .andExpect(jsonPath("$.status").value("IN_SERVICE"));
+}
+@Test
+void shouldRejectStartingWaitingAppointment() throws Exception {
+    User customer = createCustomer(
+            "appointment-start-waiting@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-start-waiting-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/start",
+                    appointmentId)
+    )
+            .andExpect(status().isConflict());
+}
+@Test
+void shouldReturnNotFoundWhenStartingMissingAppointment()
+        throws Exception {
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/start",
+                    999999L)
+    )
+            .andExpect(status().isNotFound());
+}
+
+@Test
+void shouldCompleteInServiceAppointment() throws Exception {
+    User customer = createCustomer(
+            "appointment-complete@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-complete-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    // WAITING -> CALLED
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CALLED"));
+
+    // CALLED -> IN_SERVICE
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/start",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("IN_SERVICE"));
+
+    // IN_SERVICE -> COMPLETED
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(appointmentId))
+            .andExpect(jsonPath("$.status").value("COMPLETED"));
+}
+
+@Test
+void shouldRejectCompletingWaitingAppointment() throws Exception {
+    User customer = createCustomer(
+            "appointment-complete-waiting@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-complete-waiting-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectCompletingCalledAppointment() throws Exception {
+    User customer = createCustomer(
+            "appointment-complete-called@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-complete-called-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CALLED"));
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectCompletingAlreadyCompletedAppointment()
+        throws Exception {
+
+    User customer = createCustomer(
+            "appointment-complete-twice@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-complete-twice-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/call",
+                    appointmentId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/start",
+                    appointmentId)
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId)
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldReturnNotFoundWhenCompletingMissingAppointment()
+        throws Exception {
+
+    mockMvc.perform(
+            post("/api/v1/appointments/{appointmentId}/complete",
+                    999999L)
+    )
+            .andExpect(status().isNotFound());
+}
+
 }

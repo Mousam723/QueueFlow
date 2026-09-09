@@ -24,4 +24,30 @@ public class AppointmentController {
     ) {
         return appointmentService.createAppointment(request);
     }
+
+    @PostMapping("/{appointmentId}/call")
+    @ResponseStatus(HttpStatus.OK)
+    public AppointmentResponse callAppointment(
+            @PathVariable Long appointmentId
+    ) {
+        return appointmentService.callAppointment(appointmentId);
+    }
+
+
+    @PostMapping("/{appointmentId}/start")
+    @ResponseStatus(HttpStatus.OK)
+    public AppointmentResponse startAppointment(
+            @PathVariable Long appointmentId
+    ) {
+        return appointmentService.startAppointment(appointmentId);
+    }
+
+    @PostMapping("/{appointmentId}/complete")
+@ResponseStatus(HttpStatus.OK)
+public AppointmentResponse completeAppointment(
+        @PathVariable Long appointmentId
+) {
+    return appointmentService.completeAppointment(appointmentId);
+}
+
 }
