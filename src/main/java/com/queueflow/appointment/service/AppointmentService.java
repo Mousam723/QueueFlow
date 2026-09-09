@@ -7,6 +7,7 @@ import com.queueflow.appointment.dto.AppointmentResponse;
 import com.queueflow.appointment.dto.CreateAppointmentRequest;
 import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
+import java.util.List;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
 import com.queueflow.queue.QueueStatus;
@@ -178,5 +179,41 @@ public AppointmentResponse cancelAppointment(Long appointmentId) {
             appointmentRepository.save(appointment)
     );
 }
+
+@Transactional
+public AppointmentResponse getAppointment(Long appointmentId) {
+    Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId
+                            + " was not found"
+            ));
+
+    return AppointmentResponse.from(appointment);
+}
+
+@Transactional
+public List<AppointmentResponse> getCustomerAppointments(
+        Long customerId
+) {
+    User customer = userRepository.findById(customerId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Customer with id " + customerId
+                            + " was not found"
+            ));
+
+    if (customer.getRole() != UserRole.CUSTOMER) {
+        throw new ConflictException(
+                "User with id " + customerId
+                        + " is not a customer"
+        );
+    }
+
+    return appointmentRepository
+            .findByCustomerIdOrderByCreatedAtDesc(customerId)
+            .stream()
+            .map(AppointmentResponse::from)
+            .toList();
+}
+
 
 }

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -1216,6 +1217,178 @@ void shouldReturnNotFoundWhenCancellingMissingAppointment()
                     999999L)
     )
             .andExpect(status().isNotFound());
+}
+
+@Test
+void shouldGetAppointmentById() throws Exception {
+    User customer = createCustomer(
+            "appointment-get@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-get-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String createResponse = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    JsonNode createJson = objectMapper.readTree(createResponse);
+
+    Long appointmentId = createJson.get("id").asLong();
+
+    mockMvc.perform(
+            get("/api/v1/appointments/{appointmentId}",
+                    appointmentId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(appointmentId))
+            .andExpect(
+                    jsonPath("$.customerId")
+                            .value(customer.getId())
+            )
+            .andExpect(
+                    jsonPath("$.businessId")
+                            .value(business.getId())
+            )
+            .andExpect(
+                    jsonPath("$.serviceId")
+                            .value(service.getId())
+            )
+            .andExpect(
+                    jsonPath("$.queueId")
+                            .value(queue.getId())
+            )
+            .andExpect(jsonPath("$.tokenNumber").value(1))
+            .andExpect(jsonPath("$.status").value("WAITING"));
+}
+
+@Test
+void shouldReturnNotFoundWhenGettingMissingAppointment()
+        throws Exception {
+
+    mockMvc.perform(
+            get("/api/v1/appointments/{appointmentId}",
+                    999999L)
+    )
+            .andExpect(status().isNotFound());
+}
+
+@Test
+void shouldGetCustomerAppointments() throws Exception {
+    User customer = createCustomer(
+            "appointment-history@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-history-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    // First appointment
+    mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(1));
+
+    // Second appointment
+    // This is allowed because appointments currently do not
+    // restrict a customer from joining the same queue twice.
+    mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(2));
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    customer.getId()
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(
+                    jsonPath("$[0].customerId")
+                            .value(customer.getId())
+            )
+            .andExpect(
+                    jsonPath("$[1].customerId")
+                            .value(customer.getId())
+            );
+}
+
+@Test
+void shouldReturnNotFoundWhenGettingCustomerAppointments()
+        throws Exception {
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    999999L
+            )
+    )
+            .andExpect(status().isNotFound());
+}
+
+@Test
+void shouldRejectAppointmentHistoryForNonCustomerUser()
+        throws Exception {
+
+    Business business = createBusiness(
+            "appointment-history-role-business@test.com"
+    );
+
+    Long ownerId = business.getOwner().getId();
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    ownerId
+            )
+    )
+            .andExpect(status().isConflict());
 }
 
 }

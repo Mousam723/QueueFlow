@@ -6,6 +6,7 @@ import com.queueflow.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/appointments")
@@ -56,6 +57,22 @@ public AppointmentResponse cancelAppointment(
         @PathVariable Long appointmentId
 ) {
     return appointmentService.cancelAppointment(appointmentId);
+}
+
+@GetMapping("/{appointmentId}")
+@ResponseStatus(HttpStatus.OK)
+public AppointmentResponse getAppointment(
+        @PathVariable Long appointmentId
+) {
+    return appointmentService.getAppointment(appointmentId);
+}
+
+@GetMapping("/customers/{customerId}")
+@ResponseStatus(HttpStatus.OK)
+public List<AppointmentResponse> getCustomerAppointments(
+        @PathVariable Long customerId
+) {
+    return appointmentService.getCustomerAppointments(customerId);
 }
 
 }
