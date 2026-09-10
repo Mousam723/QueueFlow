@@ -7,6 +7,7 @@ import com.queueflow.appointment.dto.AppointmentResponse;
 import com.queueflow.appointment.dto.CreateAppointmentRequest;
 import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
+import com.queueflow.appointment.dto.QueuePositionResponse;
 import java.util.List;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
@@ -190,6 +191,77 @@ public AppointmentResponse cancelAppointment(Long appointmentId) {
 
     return AppointmentResponse.from(
             appointmentRepository.save(appointment)
+    );
+}
+
+@Transactional
+public AppointmentResponse markNoShow(Long appointmentId) {
+
+    Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId
+                            + " was not found"
+            ));
+
+    if (appointment.getStatus() != AppointmentStatus.CALLED) {
+        throw new ConflictException(
+                "Appointment with id " + appointmentId
+                        + " cannot be marked as NO_SHOW from status "
+                        + appointment.getStatus()
+        );
+    }
+
+    appointment.setStatus(AppointmentStatus.NO_SHOW);
+
+    return AppointmentResponse.from(
+            appointmentRepository.save(appointment)
+    );
+}
+
+@Transactional(readOnly = true)
+public QueuePositionResponse getQueuePosition(Long appointmentId) {
+
+    Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId
+                            + " was not found"
+            ));
+
+    AppointmentStatus status = appointment.getStatus();
+
+    // Only WAITING appointments have a position in the queue.
+    if (status != AppointmentStatus.WAITING) {
+        return new QueuePositionResponse(
+                appointment.getId(),
+                appointment.getTokenNumber(),
+                status,
+                0,
+                0
+        );
+    }
+
+    long appointmentsAhead =
+            appointmentRepository
+                    .countByQueueIdAndStatusAndTokenNumberLessThan(
+                            appointment.getQueue().getId(),
+                            AppointmentStatus.WAITING,
+                            appointment.getTokenNumber()
+                    );
+
+    int queuePosition = Math.toIntExact(appointmentsAhead);
+
+    int durationMinutes =
+            appointment.getService().getDurationMinutes();
+
+    int estimatedWaitMinutes =
+            queuePosition * durationMinutes;
+
+    return new QueuePositionResponse(
+            appointment.getId(),
+            appointment.getTokenNumber(),
+            status,
+            queuePosition,
+            estimatedWaitMinutes
     );
 }
 

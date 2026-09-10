@@ -1,7 +1,6 @@
 package com.queueflow.appointment;
 
 import jakarta.persistence.LockModeType;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -10,7 +9,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
+public interface AppointmentRepository
+        extends JpaRepository<Appointment, Long> {
 
     List<Appointment> findByQueueIdOrderByTokenNumberAsc(Long queueId);
 
@@ -38,5 +38,18 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     List<Appointment> findByQueueIdAndStatusForUpdate(
             @Param("queueId") Long queueId,
             @Param("status") AppointmentStatus status
+    );
+
+    @Query("""
+            SELECT COUNT(a)
+            FROM Appointment a
+            WHERE a.queue.id = :queueId
+              AND a.status = :status
+              AND a.tokenNumber < :tokenNumber
+            """)
+    long countByQueueIdAndStatusAndTokenNumberLessThan(
+            @Param("queueId") Long queueId,
+            @Param("status") AppointmentStatus status,
+            @Param("tokenNumber") Integer tokenNumber
     );
 }

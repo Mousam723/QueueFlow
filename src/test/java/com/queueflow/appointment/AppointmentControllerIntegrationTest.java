@@ -24,6 +24,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -1648,6 +1649,342 @@ void shouldRejectCancellingCompletedAppointment()
 }
 
 @Test
+void shouldMarkCalledAppointmentAsNoShow() throws Exception {
+
+    User customer = createCustomer(
+            "no-show-called-customer@test.com"
+    );
+
+    Business business = createBusiness(
+            "no-show-called-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    // Create appointment
+    MvcResult createResult = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(1))
+            .andReturn();
+
+    JsonNode createdAppointment =
+            objectMapper.readTree(
+                    createResult.getResponse()
+                            .getContentAsString()
+            );
+
+    long appointmentId =
+            createdAppointment.get("id").asLong();
+
+    // Call appointment
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/call",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CALLED"));
+
+    // Mark as no-show
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(appointmentId))
+            .andExpect(jsonPath("$.status").value("NO_SHOW"));
+
+    Appointment appointment =
+            appointmentRepository.findById(appointmentId)
+                    .orElseThrow();
+
+    assertEquals(
+            AppointmentStatus.NO_SHOW,
+            appointment.getStatus()
+    );
+}
+
+@Test
+void shouldRejectMarkingWaitingAppointmentAsNoShow()
+        throws Exception {
+
+    User customer = createCustomer(
+            "no-show-waiting-customer@test.com"
+    );
+
+    Business business = createBusiness(
+            "no-show-waiting-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    MvcResult createResult = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.status").value("WAITING"))
+            .andReturn();
+
+    long appointmentId =
+            objectMapper.readTree(
+                    createResult.getResponse()
+                            .getContentAsString()
+            ).get("id").asLong();
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message")
+                    .value(org.hamcrest.Matchers.containsString(
+                            "cannot be marked as NO_SHOW"
+                    )));
+}
+
+@Test
+void shouldRejectMarkingInServiceAppointmentAsNoShow()
+        throws Exception {
+
+    User customer = createCustomer(
+            "no-show-in-service-customer@test.com"
+    );
+
+    Business business = createBusiness(
+            "no-show-in-service-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    MvcResult createResult = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    long appointmentId =
+            objectMapper.readTree(
+                    createResult.getResponse()
+                            .getContentAsString()
+            ).get("id").asLong();
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/call",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CALLED"));
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/start",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("IN_SERVICE"));
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectMarkingCompletedAppointmentAsNoShow()
+        throws Exception {
+
+    User customer = createCustomer(
+            "no-show-completed-customer@test.com"
+    );
+
+    Business business = createBusiness(
+            "no-show-completed-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    MvcResult createResult = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    long appointmentId =
+            objectMapper.readTree(
+                    createResult.getResponse()
+                            .getContentAsString()
+            ).get("id").asLong();
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/call",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/start",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk());
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/complete",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldRejectMarkingCancelledAppointmentAsNoShow()
+        throws Exception {
+
+    User customer = createCustomer(
+            "no-show-cancelled-customer@test.com"
+    );
+
+    Business business = createBusiness(
+            "no-show-cancelled-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    MvcResult createResult = mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    long appointmentId =
+            objectMapper.readTree(
+                    createResult.getResponse()
+                            .getContentAsString()
+            ).get("id").asLong();
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/cancel",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    appointmentId
+            )
+    )
+            .andExpect(status().isConflict());
+}
+
+@Test
+void shouldReturnNotFoundWhenMarkingMissingAppointmentAsNoShow()
+        throws Exception {
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/appointments/{appointmentId}/no-show",
+                    999999L
+            )
+    )
+            .andExpect(status().isNotFound());
+}
+
+@Test
 void shouldReturnNotFoundWhenCancellingMissingAppointment()
         throws Exception {
 
@@ -1830,4 +2167,306 @@ void shouldRejectAppointmentHistoryForNonCustomerUser()
             .andExpect(status().isConflict());
 }
 
+    /*
+     * ============================================================
+     * QUEUE POSITION AND ETA
+     * ============================================================
+     */
+
+    @Test
+    void shouldReturnCorrectPositionAndEtaForWaitingAppointment()
+            throws Exception {
+
+        User customerOne = createCustomer(
+                "position-customer-1@test.com"
+        );
+
+        User customerTwo = createCustomer(
+                "position-customer-2@test.com"
+        );
+
+        User customerThree = createCustomer(
+                "position-customer-3@test.com"
+        );
+
+        Business business = createBusiness(
+                "position-business@test.com"
+        );
+
+        Service service = createService(business);
+
+        Queue queue = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        mockMvc.perform(
+                post("/api/v1/appointments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                createAppointmentRequest(
+                                        customerOne.getId(),
+                                        queue.getId()
+                                )
+                        )
+        )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tokenNumber").value(1));
+
+        mockMvc.perform(
+                post("/api/v1/appointments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                createAppointmentRequest(
+                                        customerTwo.getId(),
+                                        queue.getId()
+                                )
+                        )
+        )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tokenNumber").value(2));
+
+        String thirdAppointmentResponse =
+                mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customerThree.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        Long thirdAppointmentId =
+                objectMapper.readTree(thirdAppointmentResponse)
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                get("/api/v1/appointments/{appointmentId}/position",
+                        thirdAppointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId")
+                        .value(thirdAppointmentId))
+                .andExpect(jsonPath("$.tokenNumber")
+                        .value(3))
+                .andExpect(jsonPath("$.status")
+                        .value("WAITING"))
+                .andExpect(jsonPath("$.queuePosition")
+                        .value(2))
+                .andExpect(jsonPath("$.estimatedWaitMinutes")
+                        .value(60));
+    }
+
+
+    @Test
+    void shouldReturnZeroPositionAndEtaForFirstWaitingAppointment()
+            throws Exception {
+
+        User customer = createCustomer(
+                "position-first-customer@test.com"
+        );
+
+        Business business = createBusiness(
+                "position-first-business@test.com"
+        );
+
+        Service service = createService(business);
+
+        Queue queue = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        String response =
+                mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customer.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        Long appointmentId =
+                objectMapper.readTree(response)
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                get("/api/v1/appointments/{appointmentId}/position",
+                        appointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId")
+                        .value(appointmentId))
+                .andExpect(jsonPath("$.tokenNumber")
+                        .value(1))
+                .andExpect(jsonPath("$.status")
+                        .value("WAITING"))
+                .andExpect(jsonPath("$.queuePosition")
+                        .value(0))
+                .andExpect(jsonPath("$.estimatedWaitMinutes")
+                        .value(0));
+    }
+
+
+    @Test
+    void shouldReturnZeroPositionAndEtaForCalledAppointment()
+            throws Exception {
+
+        User customer = createCustomer(
+                "position-called-customer@test.com"
+        );
+
+        Business business = createBusiness(
+                "position-called-business@test.com"
+        );
+
+        Service service = createService(business);
+
+        Queue queue = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        String response =
+                mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customer.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        Long appointmentId =
+                objectMapper.readTree(response)
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                post("/api/v1/appointments/{appointmentId}/call",
+                        appointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status")
+                        .value("CALLED"));
+
+        mockMvc.perform(
+                get("/api/v1/appointments/{appointmentId}/position",
+                        appointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId")
+                        .value(appointmentId))
+                .andExpect(jsonPath("$.tokenNumber")
+                        .value(1))
+                .andExpect(jsonPath("$.status")
+                        .value("CALLED"))
+                .andExpect(jsonPath("$.queuePosition")
+                        .value(0))
+                .andExpect(jsonPath("$.estimatedWaitMinutes")
+                        .value(0));
+    }
+
+
+    @Test
+    void shouldReturnZeroPositionAndEtaForCancelledAppointment()
+            throws Exception {
+
+        User customer = createCustomer(
+                "position-cancelled-customer@test.com"
+        );
+
+        Business business = createBusiness(
+                "position-cancelled-business@test.com"
+        );
+
+        Service service = createService(business);
+
+        Queue queue = createQueue(
+                business,
+                service,
+                LocalDate.of(2026, 8, 31)
+        );
+
+        String response =
+                mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customer.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        Long appointmentId =
+                objectMapper.readTree(response)
+                        .get("id")
+                        .asLong();
+
+        mockMvc.perform(
+                post("/api/v1/appointments/{appointmentId}/cancel",
+                        appointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status")
+                        .value("CANCELLED"));
+
+        mockMvc.perform(
+                get("/api/v1/appointments/{appointmentId}/position",
+                        appointmentId)
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appointmentId")
+                        .value(appointmentId))
+                .andExpect(jsonPath("$.tokenNumber")
+                        .value(1))
+                .andExpect(jsonPath("$.status")
+                        .value("CANCELLED"))
+                .andExpect(jsonPath("$.queuePosition")
+                        .value(0))
+                .andExpect(jsonPath("$.estimatedWaitMinutes")
+                        .value(0));
+    }
+
+
+    @Test
+    void shouldReturnNotFoundForMissingAppointmentPosition()
+            throws Exception {
+
+        mockMvc.perform(
+                get("/api/v1/appointments/{appointmentId}/position",
+                        999999L)
+        )
+                .andExpect(status().isNotFound());
+    }
 }

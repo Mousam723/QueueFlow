@@ -2,6 +2,7 @@ package com.queueflow.appointment.controller;
 
 import com.queueflow.appointment.dto.AppointmentResponse;
 import com.queueflow.appointment.dto.CreateAppointmentRequest;
+import com.queueflow.appointment.dto.QueuePositionResponse;
 import com.queueflow.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -57,6 +58,22 @@ public AppointmentResponse cancelAppointment(
         @PathVariable Long appointmentId
 ) {
     return appointmentService.cancelAppointment(appointmentId);
+}
+
+@PostMapping("/{appointmentId}/no-show")
+@ResponseStatus(HttpStatus.OK)
+public AppointmentResponse markNoShow(
+        @PathVariable Long appointmentId
+) {
+    return appointmentService.markNoShow(appointmentId);
+}
+
+@GetMapping("/{appointmentId}/position")
+@ResponseStatus(HttpStatus.OK)
+public QueuePositionResponse getQueuePosition(
+        @PathVariable Long appointmentId
+) {
+    return appointmentService.getQueuePosition(appointmentId);
 }
 
 @GetMapping("/{appointmentId}")
