@@ -306,6 +306,111 @@ class AppointmentControllerIntegrationTest {
     }
 
     @Test
+void shouldSafelyAllocateUniqueTokensWithConcurrentRequests()
+        throws Exception {
+
+    Business business = createBusiness(
+            "appointment-concurrent-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    List<User> customers = new ArrayList<>();
+
+    for (int i = 1; i <= 10; i++) {
+        customers.add(
+                createCustomer(
+                        "appointment-concurrent-" + i + "@test.com"
+                )
+        );
+    }
+
+    ExecutorService executorService =
+            Executors.newFixedThreadPool(10);
+
+    try {
+        List<Callable<Integer>> tasks = new ArrayList<>();
+
+        for (User customer : customers) {
+            tasks.add(() -> {
+                String response = mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customer.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+                JsonNode jsonNode =
+                        objectMapper.readTree(response);
+
+                return jsonNode.get("tokenNumber").asInt();
+            });
+        }
+
+        List<Future<Integer>> futures =
+                executorService.invokeAll(tasks);
+
+        List<Integer> tokens = new ArrayList<>();
+
+        for (Future<Integer> future : futures) {
+            tokens.add(future.get());
+        }
+
+        assertEquals(10, tokens.size());
+        assertEquals(10, tokens.stream().distinct().count());
+
+        tokens.sort(Integer::compareTo);
+
+        assertEquals(
+                List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                tokens
+        );
+
+        Queue finalQueue =
+                queueRepository.findById(queue.getId())
+                        .orElseThrow();
+
+        assertEquals(0, finalQueue.getCurrentToken());
+        assertEquals(10, finalQueue.getNextTokenNumber());
+
+        List<Appointment> appointments =
+                appointmentRepository
+                        .findByQueueIdOrderByTokenNumberAsc(
+                                queue.getId()
+                        );
+
+        assertEquals(10, appointments.size());
+
+        for (int i = 0; i < appointments.size(); i++) {
+            Appointment appointment = appointments.get(i);
+
+            assertEquals(i + 1, appointment.getTokenNumber());
+            assertEquals(
+                    AppointmentStatus.WAITING,
+                    appointment.getStatus()
+            );
+        }
+
+    } finally {
+        executorService.shutdown();
+    }
+}
+
+    @Test
 void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
         throws Exception {
 
