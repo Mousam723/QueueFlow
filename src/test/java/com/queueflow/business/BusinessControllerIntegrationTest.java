@@ -160,4 +160,85 @@ void shouldReturn404WhenBusinessDoesNotExist() throws Exception {
             .andExpect(jsonPath("$.message")
                     .value("Business with id 999999 was not found"));
 }
+
+@Test
+void shouldGetBusinessesByOwnerSuccessfully() throws Exception {
+    User owner = new User();
+    owner.setName("List Business Owner");
+    owner.setEmail("list-business-owner@test.com");
+    owner.setPhone("9999999998");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest firstRequest = new CreateBusinessRequest();
+    firstRequest.setOwnerId(savedOwner.getId());
+    firstRequest.setName("Clinic One");
+    firstRequest.setDescription("First clinic");
+    firstRequest.setAddress("Hyderabad");
+    firstRequest.setTimezone("Asia/Kolkata");
+
+    CreateBusinessRequest secondRequest = new CreateBusinessRequest();
+    secondRequest.setOwnerId(savedOwner.getId());
+    secondRequest.setName("Clinic Two");
+    secondRequest.setDescription("Second clinic");
+    secondRequest.setAddress("Secunderabad");
+    secondRequest.setTimezone("Asia/Kolkata");
+
+    mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(firstRequest))
+    ).andExpect(status().isCreated());
+
+    mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(secondRequest))
+    ).andExpect(status().isCreated());
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].name").value("Clinic One"))
+            .andExpect(jsonPath("$[1].name").value("Clinic Two"));
+}
+
+@Test
+void shouldReturnEmptyListWhenOwnerHasNoBusinesses() throws Exception {
+    User owner = new User();
+    owner.setName("Empty Business Owner");
+    owner.setEmail("empty-business-owner@test.com");
+    owner.setPhone("9999999997");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+
+    User savedOwner = userRepository.save(owner);
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+}
+
+@Test
+void shouldReturn404WhenListingBusinessesForMissingOwner() throws Exception {
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", "999999")
+    )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error")
+                    .value("RESOURCE_NOT_FOUND"))
+            .andExpect(jsonPath("$.message")
+                    .value("Business owner with id 999999 was not found"));
+}
+
 }

@@ -11,6 +11,7 @@ import com.queueflow.user.UserRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 
 @Service
 public class BusinessService {
@@ -57,4 +58,19 @@ public BusinessResponse getBusiness(Long businessId) {
 
     return BusinessResponse.from(business);
 }
+
+@Transactional(readOnly = true)
+public List<BusinessResponse> getBusinessesByOwner(Long ownerId) {
+    if (!userRepository.existsById(ownerId)) {
+        throw new ResourceNotFoundException(
+                "Business owner with id " + ownerId + " was not found"
+        );
+    }
+
+    return businessRepository.findByOwnerId(ownerId)
+            .stream()
+            .map(BusinessResponse::from)
+            .toList();
+}
+
 }
