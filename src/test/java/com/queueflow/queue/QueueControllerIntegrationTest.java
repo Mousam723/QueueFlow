@@ -14,6 +14,9 @@ import com.queueflow.service.ServiceStatus;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
+import com.queueflow.appointment.Appointment;
+import com.queueflow.appointment.AppointmentRepository;
+import com.queueflow.appointment.AppointmentStatus;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -66,8 +69,12 @@ class QueueControllerIntegrationTest {
     @Autowired
     private QueueRepository queueRepository;
 
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
     @AfterEach
     void cleanupTestData() {
+        appointmentRepository.deleteAll();
         queueRepository.deleteAll();
         serviceRepository.deleteAll();
         businessRepository.deleteAll();
@@ -105,6 +112,15 @@ class QueueControllerIntegrationTest {
         return businessRepository.save(business);
     }
 
+    private User createCustomer(String email) {
+        User customer = new User();
+        customer.setName("Queue Test Customer");
+        customer.setEmail(email);
+        customer.setPhone("8888888888");
+        customer.setPasswordHash("test-password");
+        customer.setRole(UserRole.CUSTOMER);
+        return userRepository.save(customer);
+    }
 
     private Service createService(Business business) {
 
@@ -159,6 +175,27 @@ class QueueControllerIntegrationTest {
         return queueId;
     }
 
+    private Appointment createAppointment(
+        Business business,
+        Service service,
+        Long queueId,
+        User customer,
+        int tokenNumber
+) {
+    Queue queue = queueRepository.findById(queueId)
+            .orElseThrow();
+
+    Appointment appointment = new Appointment();
+    appointment.setCustomer(customer);
+    appointment.setBusiness(business);
+    appointment.setService(service);
+    appointment.setQueue(queue);
+    appointment.setTokenNumber(tokenNumber);
+    appointment.setAppointmentDate(queue.getQueueDate());
+    appointment.setStatus(AppointmentStatus.WAITING);
+
+    return appointmentRepository.save(appointment);
+}
 
     /*
      * ============================================================
@@ -536,99 +573,163 @@ class QueueControllerIntegrationTest {
      */
 
     @Test
-    void shouldAdvanceActiveQueue()
-            throws Exception {
+void shouldAdvanceActiveQueue() throws Exception {
+    Business business = createBusiness(
+            "queue-next@test.com"
+    );
 
-        Business business = createBusiness(
-                "queue-next@test.com"
-        );
+    Service service = createService(business);
 
-        Service service =
-                createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
 
-        Long queueId =
-                createQueue(
-                        business,
-                        service,
-                        LocalDate.of(2026, 8, 31)
-                );
+    User customer = createCustomer(
+            "queue-next-customer@test.com"
+    );
 
-        mockMvc.perform(
-                post(
-                        "/api/v1/queues/{queueId}/next",
-                        queueId
-                )
-        )
-                .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$.id")
-                                .value(queueId)
-                )
-                .andExpect(
-                        jsonPath("$.status")
-                                .value("ACTIVE")
-                )
-                .andExpect(
-                        jsonPath("$.currentToken")
-                                .value(1)
-                );
-    }
+    Appointment appointment = createAppointment(
+            business,
+            service,
+            queueId,
+            customer,
+            1
+    );
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/queues/{queueId}/next",
+                    queueId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(
+                    jsonPath("$.id").value(queueId)
+            )
+            .andExpect(
+                    jsonPath("$.status").value("ACTIVE")
+            )
+            .andExpect(
+                    jsonPath("$.currentToken").value(1)
+            );
+
+    Appointment updatedAppointment =
+            appointmentRepository.findById(appointment.getId())
+                    .orElseThrow();
+
+    assertEquals(
+            AppointmentStatus.CALLED,
+            updatedAppointment.getStatus()
+    );
+}
 
 
-    @Test
-    void shouldAdvanceQueueMultipleTimes()
-            throws Exception {
+@Test
+void shouldAdvanceQueueMultipleTimes() throws Exception {
+    Business business = createBusiness(
+            "queue-next-multiple@test.com"
+    );
 
-        Business business = createBusiness(
-                "queue-next-multiple@test.com"
-        );
+    Service service = createService(business);
 
-        Service service =
-                createService(business);
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
 
-        Long queueId =
-                createQueue(
-                        business,
-                        service,
-                        LocalDate.of(2026, 8, 31)
-                );
+    User customer1 = createCustomer(
+            "queue-next-multiple-1@test.com"
+    );
 
-        mockMvc.perform(
-                post(
-                        "/api/v1/queues/{queueId}/next",
-                        queueId
-                )
-        )
-                .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$.currentToken")
-                                .value(1)
-                );
+    User customer2 = createCustomer(
+            "queue-next-multiple-2@test.com"
+    );
 
-        mockMvc.perform(
-                post(
-                        "/api/v1/queues/{queueId}/next",
-                        queueId
-                )
-        )
-                .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$.currentToken")
-                                .value(2)
-                );
+    User customer3 = createCustomer(
+            "queue-next-multiple-3@test.com"
+    );
 
-        mockMvc.perform(
-                post(
-                        "/api/v1/queues/{queueId}/next",
-                        queueId
-                )
-        )
-                .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$.currentToken")
-                                .value(3)
-                );
-    }
+    Appointment appointment1 = createAppointment(
+            business,
+            service,
+            queueId,
+            customer1,
+            1
+    );
+
+    Appointment appointment2 = createAppointment(
+            business,
+            service,
+            queueId,
+            customer2,
+            2
+    );
+
+    Appointment appointment3 = createAppointment(
+            business,
+            service,
+            queueId,
+            customer3,
+            3
+    );
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/queues/{queueId}/next",
+                    queueId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(
+                    jsonPath("$.currentToken").value(1)
+            );
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/queues/{queueId}/next",
+                    queueId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(
+                    jsonPath("$.currentToken").value(2)
+            );
+
+    mockMvc.perform(
+            post(
+                    "/api/v1/queues/{queueId}/next",
+                    queueId
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(
+                    jsonPath("$.currentToken").value(3)
+            );
+
+    assertEquals(
+            AppointmentStatus.CALLED,
+            appointmentRepository.findById(appointment1.getId())
+                    .orElseThrow()
+                    .getStatus()
+    );
+
+    assertEquals(
+            AppointmentStatus.CALLED,
+            appointmentRepository.findById(appointment2.getId())
+                    .orElseThrow()
+                    .getStatus()
+    );
+
+    assertEquals(
+            AppointmentStatus.CALLED,
+            appointmentRepository.findById(appointment3.getId())
+                    .orElseThrow()
+                    .getStatus()
+    );
+}
 
 
     @Test
@@ -652,117 +753,131 @@ class QueueControllerIntegrationTest {
      */
 
     @Test
-    void shouldSafelyAdvanceQueueWithConcurrentRequests()
-            throws Exception {
+void shouldSafelyAdvanceQueueWithConcurrentRequests()
+        throws Exception {
 
-        Business business = createBusiness(
-                "queue-concurrency@test.com"
+    Business business = createBusiness(
+            "queue-concurrency@test.com"
+    );
+
+    Service service = createService(business);
+
+    Long queueId = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    int requestCount = 10;
+
+    List<Appointment> appointments = new ArrayList<>();
+
+    for (int i = 1; i <= requestCount; i++) {
+        User customer = createCustomer(
+                "queue-concurrency-" + i + "@test.com"
         );
 
-        Service service =
-                createService(business);
-
-        Long queueId =
-                createQueue(
+        appointments.add(
+                createAppointment(
                         business,
                         service,
-                        LocalDate.of(2026, 8, 31)
-                );
-
-        int requestCount = 10;
-
-        ExecutorService executorService =
-                Executors.newFixedThreadPool(
-                        requestCount
-                );
-
-        try {
-
-            List<Callable<Integer>> tasks =
-                    new ArrayList<>();
-
-            for (int i = 0;
-                 i < requestCount;
-                 i++) {
-
-                tasks.add(() -> {
-
-                    String response =
-                            mockMvc.perform(
-                                    post(
-                                            "/api/v1/queues/{queueId}/next",
-                                            queueId
-                                    )
-                            )
-                                    .andExpect(
-                                            status().isOk()
-                                    )
-                                    .andReturn()
-                                    .getResponse()
-                                    .getContentAsString();
-
-                    JsonNode jsonNode =
-                            objectMapper.readTree(
-                                    response
-                            );
-
-                    return jsonNode
-                            .get("currentToken")
-                            .asInt();
-                });
-            }
-
-            List<Future<Integer>> results =
-                    executorService.invokeAll(
-                            tasks
-                    );
-
-            List<Integer> tokens =
-                    new ArrayList<>();
-
-            for (Future<Integer> result : results) {
-                tokens.add(result.get());
-            }
-
-            assertEquals(
-                    requestCount,
-                    tokens.size()
-            );
-
-            assertEquals(
-                    requestCount,
-                    tokens.stream()
-                            .distinct()
-                            .count()
-            );
-
-            assertEquals(
-                    requestCount,
-                    tokens.stream()
-                            .mapToInt(
-                                    Integer::intValue
-                            )
-                            .max()
-                            .orElse(0)
-            );
-
-            mockMvc.perform(
-                    get(
-                            "/api/v1/queues/{queueId}",
-                            queueId
-                    )
-            )
-                    .andExpect(status().isOk())
-                    .andExpect(
-                            jsonPath("$.currentToken")
-                                    .value(requestCount)
-                    );
-
-        } finally {
-
-            executorService.shutdown();
-        }
+                        queueId,
+                        customer,
+                        i
+                )
+        );
     }
+
+    ExecutorService executorService =
+            Executors.newFixedThreadPool(requestCount);
+
+    try {
+        List<Callable<Integer>> tasks =
+                new ArrayList<>();
+
+        for (int i = 0; i < requestCount; i++) {
+            tasks.add(() -> {
+                String response =
+                        mockMvc.perform(
+                                post(
+                                        "/api/v1/queues/{queueId}/next",
+                                        queueId
+                                )
+                        )
+                                .andExpect(
+                                        status().isOk()
+                                )
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString();
+
+                JsonNode jsonNode =
+                        objectMapper.readTree(response);
+
+                return jsonNode
+                        .get("currentToken")
+                        .asInt();
+            });
+        }
+
+        List<Future<Integer>> results =
+                executorService.invokeAll(tasks);
+
+        List<Integer> tokens =
+                new ArrayList<>();
+
+        for (Future<Integer> result : results) {
+            tokens.add(result.get());
+        }
+
+        assertEquals(
+                requestCount,
+                tokens.size()
+        );
+
+        assertEquals(
+                requestCount,
+                tokens.stream()
+                        .distinct()
+                        .count()
+        );
+
+        assertEquals(
+                requestCount,
+                tokens.stream()
+                        .mapToInt(Integer::intValue)
+                        .max()
+                        .orElse(0)
+        );
+
+        for (Appointment appointment : appointments) {
+            Appointment updatedAppointment =
+                    appointmentRepository
+                            .findById(appointment.getId())
+                            .orElseThrow();
+
+            assertEquals(
+                    AppointmentStatus.CALLED,
+                    updatedAppointment.getStatus()
+            );
+        }
+
+        mockMvc.perform(
+                get(
+                        "/api/v1/queues/{queueId}",
+                        queueId
+                )
+        )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.currentToken")
+                                .value(requestCount)
+                );
+
+    } finally {
+        executorService.shutdown();
+    }
+}
 
     @Test
 void shouldPauseActiveQueue() throws Exception {

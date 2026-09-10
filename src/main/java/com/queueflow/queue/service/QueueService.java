@@ -12,6 +12,9 @@ import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.service.Service;
 import com.queueflow.service.ServiceRepository;
+import com.queueflow.appointment.Appointment;
+import com.queueflow.appointment.AppointmentRepository;
+import com.queueflow.appointment.AppointmentStatus;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +27,17 @@ public class QueueService {
     private final QueueRepository queueRepository;
     private final BusinessRepository businessRepository;
     private final ServiceRepository serviceRepository;
-
+    private final AppointmentRepository appointmentRepository;
     public QueueService(
             QueueRepository queueRepository,
             BusinessRepository businessRepository,
-            ServiceRepository serviceRepository) {
+            ServiceRepository serviceRepository,
+            AppointmentRepository appointmentRepository) {
 
         this.queueRepository = queueRepository;
         this.businessRepository = businessRepository;
         this.serviceRepository = serviceRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
     @Transactional
@@ -99,15 +104,41 @@ public class QueueService {
     }
 
     @Transactional
-    public QueueResponse advanceQueue(Long queueId) {
-        Queue queue = queueRepository.findByIdForUpdate(queueId) .orElseThrow(() -> new ResourceNotFoundException( "Queue with id " + queueId + " was not found" ));
-        if (queue.getStatus() != QueueStatus.ACTIVE) {
-             throw new ConflictException( "Queue with id " + queueId + " is not active" );
-        }
-        queue.setCurrentToken(queue.getCurrentToken() + 1);
-        Queue savedQueue = queueRepository.save(queue);
-        return QueueResponse.from(savedQueue);
+public QueueResponse advanceQueue(Long queueId) {
+    Queue queue = queueRepository.findByIdForUpdate(queueId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Queue with id " + queueId + " was not found"
+            ));
+
+    if (queue.getStatus() != QueueStatus.ACTIVE) {
+        throw new ConflictException(
+                "Queue with id " + queueId + " is not active"
+        );
     }
+
+    List<Appointment> waitingAppointments =
+            appointmentRepository
+                    .findByQueueIdAndStatusOrderByTokenNumberAsc(
+                            queueId,
+                            AppointmentStatus.WAITING
+                    );
+
+    if (waitingAppointments.isEmpty()) {
+        throw new ConflictException(
+                "No waiting appointments in queue with id " + queueId
+        );
+    }
+
+    Appointment nextAppointment = waitingAppointments.get(0);
+
+    nextAppointment.setStatus(AppointmentStatus.CALLED);
+    appointmentRepository.save(nextAppointment);
+
+    queue.setCurrentToken(nextAppointment.getTokenNumber());
+    Queue savedQueue = queueRepository.save(queue);
+
+    return QueueResponse.from(savedQueue);
+}
 
     @Transactional(readOnly = true)
     public List<QueueResponse> getBusinessQueues(
