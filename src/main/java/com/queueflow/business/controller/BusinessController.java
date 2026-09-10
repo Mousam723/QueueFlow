@@ -44,4 +44,12 @@ public List<BusinessResponse> getBusinessesByOwner(
     return businessService.getBusinessesByOwner(ownerId);
 }
 
+@PatchMapping("/{businessId}/deactivate")
+@ResponseStatus(HttpStatus.OK)
+public BusinessResponse deactivateBusiness(
+        @PathVariable Long businessId
+) {
+    return businessService.deactivateBusiness(businessId);
+}
+
 }

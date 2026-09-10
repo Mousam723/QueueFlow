@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -239,6 +240,108 @@ void shouldReturn404WhenListingBusinessesForMissingOwner() throws Exception {
                     .value("RESOURCE_NOT_FOUND"))
             .andExpect(jsonPath("$.message")
                     .value("Business owner with id 999999 was not found"));
+}
+
+@Test
+void shouldDeactivateBusinessSuccessfully() throws Exception {
+    User owner = new User();
+    owner.setName("Deactivate Owner");
+    owner.setEmail("deactivate-owner@test.com");
+    owner.setPhone("9999999996");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest request = new CreateBusinessRequest();
+    request.setOwnerId(savedOwner.getId());
+    request.setName("Business To Deactivate");
+    request.setDescription("Business description");
+    request.setAddress("Hyderabad");
+    request.setTimezone("Asia/Kolkata");
+
+    String response = mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long businessId = objectMapper.readTree(response)
+            .get("id")
+            .asLong();
+
+    mockMvc.perform(
+            patch("/api/v1/businesses/{businessId}/deactivate", businessId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(businessId))
+            .andExpect(jsonPath("$.name").value("Business To Deactivate"))
+            .andExpect(jsonPath("$.status").value("INACTIVE"));
+}
+
+@Test
+void shouldReturn409WhenBusinessIsAlreadyInactive() throws Exception {
+    User owner = new User();
+    owner.setName("Already Inactive Owner");
+    owner.setEmail("already-inactive-owner@test.com");
+    owner.setPhone("9999999995");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest request = new CreateBusinessRequest();
+    request.setOwnerId(savedOwner.getId());
+    request.setName("Already Inactive Business");
+    request.setDescription("Business description");
+    request.setAddress("Hyderabad");
+    request.setTimezone("Asia/Kolkata");
+
+    String response = mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long businessId = objectMapper.readTree(response)
+            .get("id")
+            .asLong();
+
+    mockMvc.perform(
+            patch("/api/v1/businesses/{businessId}/deactivate", businessId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("INACTIVE"));
+
+    mockMvc.perform(
+            patch("/api/v1/businesses/{businessId}/deactivate", businessId)
+    )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message")
+                    .value("Business with id " + businessId + " is already inactive"));
+}
+
+@Test
+void shouldReturn404WhenDeactivatingMissingBusiness() throws Exception {
+    mockMvc.perform(
+            patch("/api/v1/businesses/{businessId}/deactivate", 999999L)
+    )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error")
+                    .value("RESOURCE_NOT_FOUND"))
+            .andExpect(jsonPath("$.message")
+                    .value("Business with id 999999 was not found"));
 }
 
 }

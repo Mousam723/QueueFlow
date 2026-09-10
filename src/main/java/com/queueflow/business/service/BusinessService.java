@@ -5,6 +5,7 @@ import com.queueflow.business.BusinessRepository;
 import com.queueflow.business.BusinessStatus;
 import com.queueflow.business.dto.BusinessResponse;
 import com.queueflow.business.dto.CreateBusinessRequest;
+import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
@@ -71,6 +72,27 @@ public List<BusinessResponse> getBusinessesByOwner(Long ownerId) {
             .stream()
             .map(BusinessResponse::from)
             .toList();
+}
+
+@Transactional
+public BusinessResponse deactivateBusiness(Long businessId) {
+    Business business = businessRepository.findById(businessId)
+            .orElseThrow(() ->
+                    new ResourceNotFoundException(
+                            "Business with id " + businessId + " was not found"
+                    ));
+
+    if (business.getStatus() == BusinessStatus.INACTIVE) {
+        throw new ConflictException(
+                "Business with id " + businessId + " is already inactive"
+        );
+    }
+
+    business.setStatus(BusinessStatus.INACTIVE);
+
+    Business savedBusiness = businessRepository.save(business);
+
+    return BusinessResponse.from(savedBusiness);
 }
 
 }
