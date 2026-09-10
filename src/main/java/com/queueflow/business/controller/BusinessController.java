@@ -26,4 +26,12 @@ public class BusinessController {
 
         return businessService.createBusiness(request);
     }
+
+    @GetMapping("/{businessId}")
+@ResponseStatus(HttpStatus.OK)
+public BusinessResponse getBusiness(
+        @PathVariable Long businessId
+) {
+    return businessService.getBusiness(businessId);
+}
 }

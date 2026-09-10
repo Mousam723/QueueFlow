@@ -46,4 +46,15 @@ public class BusinessService {
 
         return BusinessResponse.from(savedBusiness);
     }
+
+    @Transactional(readOnly = true)
+public BusinessResponse getBusiness(Long businessId) {
+    Business business = businessRepository.findById(businessId)
+            .orElseThrow(() ->
+                    new ResourceNotFoundException(
+                            "Business with id " + businessId + " was not found"
+                    ));
+
+    return BusinessResponse.from(business);
+}
 }
