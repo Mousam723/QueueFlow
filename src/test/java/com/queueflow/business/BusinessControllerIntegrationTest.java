@@ -2,6 +2,7 @@ package com.queueflow.business;
 
 import tools.jackson.databind.ObjectMapper;
 import com.queueflow.business.dto.CreateBusinessRequest;
+import com.queueflow.businessstaff.dto.AssignStaffRequest;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
@@ -18,6 +19,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -342,6 +344,300 @@ void shouldReturn404WhenDeactivatingMissingBusiness() throws Exception {
                     .value("RESOURCE_NOT_FOUND"))
             .andExpect(jsonPath("$.message")
                     .value("Business with id 999999 was not found"));
+}
+
+@Test
+void shouldAssignStaffSuccessfully() throws Exception {
+    User owner = new User();
+    owner.setName("Staff Business Owner");
+    owner.setEmail("staff-business-owner@test.com");
+    owner.setPhone("9999999991");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest businessRequest = new CreateBusinessRequest();
+    businessRequest.setOwnerId(savedOwner.getId());
+    businessRequest.setName("Staff Test Business");
+    businessRequest.setDescription("Business for staff testing");
+    businessRequest.setAddress("Hyderabad");
+    businessRequest.setTimezone("Asia/Kolkata");
+
+    String businessResponse = mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(businessRequest))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long businessId = objectMapper.readTree(businessResponse)
+            .get("id")
+            .asLong();
+
+    User staff = new User();
+    staff.setName("Test Staff");
+    staff.setEmail("test-staff@test.com");
+    staff.setPhone("9999999992");
+    staff.setPasswordHash("test-password");
+    staff.setRole(UserRole.STAFF);
+
+    User savedStaff = userRepository.save(staff);
+
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(savedStaff.getId());
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.staffId").value(savedStaff.getId()))
+            .andExpect(jsonPath("$.name").value("Test Staff"))
+            .andExpect(jsonPath("$.email").value("test-staff@test.com"));
+}
+
+@Test
+void shouldReturn409WhenStaffIsAlreadyAssigned() throws Exception {
+    User owner = createUser(
+            "Duplicate Staff Owner",
+            "duplicate-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(owner.getId(), "Duplicate Staff Business");
+
+    User staff = createUser(
+            "Duplicate Staff",
+            "duplicate-staff@test.com",
+            UserRole.STAFF
+    );
+
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(staff.getId());
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.error").value("CONFLICT"));
+}
+
+@Test
+void shouldReturn404WhenAssigningStaffToMissingBusiness() throws Exception {
+    User staff = createUser(
+            "Missing Business Staff",
+            "missing-business-staff@test.com",
+            UserRole.STAFF
+    );
+
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(staff.getId());
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", 999999L)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error")
+                    .value("RESOURCE_NOT_FOUND"));
+}
+
+@Test
+void shouldReturn404WhenAssigningMissingStaff() throws Exception {
+    User owner = createUser(
+            "Missing Staff Owner",
+            "missing-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(
+            owner.getId(),
+            "Missing Staff Business"
+    );
+
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(999999L);
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error")
+                    .value("RESOURCE_NOT_FOUND"));
+}
+
+@Test
+void shouldReturn400WhenAssigningNonStaffUser() throws Exception {
+    User owner = createUser(
+            "Non Staff Owner",
+            "non-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(
+            owner.getId(),
+            "Non Staff Business"
+    );
+
+    User customer = createUser(
+            "Regular Customer",
+            "regular-customer@test.com",
+            UserRole.CUSTOMER
+    );
+
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(customer.getId());
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error")
+                    .value("BAD_REQUEST"));
+}
+
+@Test
+void shouldListBusinessStaffSuccessfully() throws Exception {
+    User owner = createUser(
+            "List Staff Owner",
+            "list-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(
+            owner.getId(),
+            "List Staff Business"
+    );
+
+    User firstStaff = createUser(
+            "First Staff",
+            "first-staff@test.com",
+            UserRole.STAFF
+    );
+
+    User secondStaff = createUser(
+            "Second Staff",
+            "second-staff@test.com",
+            UserRole.STAFF
+    );
+
+    assignStaff(businessId, firstStaff.getId());
+    assignStaff(businessId, secondStaff.getId());
+
+    mockMvc.perform(
+            get("/api/v1/businesses/{businessId}/staff", businessId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].name").value("First Staff"))
+            .andExpect(jsonPath("$[1].name").value("Second Staff"));
+}
+
+@Test
+void shouldReturnEmptyListWhenBusinessHasNoStaff() throws Exception {
+    User owner = createUser(
+            "Empty Staff Owner",
+            "empty-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(
+            owner.getId(),
+            "Empty Staff Business"
+    );
+
+    mockMvc.perform(
+            get("/api/v1/businesses/{businessId}/staff", businessId)
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+}
+
+@Test
+void shouldReturn404WhenListingStaffForMissingBusiness() throws Exception {
+    mockMvc.perform(
+            get("/api/v1/businesses/{businessId}/staff", 999999L)
+    )
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error")
+                    .value("RESOURCE_NOT_FOUND"));
+}
+
+private User createUser(
+        String name,
+        String email,
+        UserRole role
+) {
+    User user = new User();
+    user.setName(name);
+    user.setEmail(email);
+    user.setPhone("9999999999");
+    user.setPasswordHash("test-password");
+    user.setRole(role);
+
+    return userRepository.save(user);
+}
+
+private Long createBusiness(
+        Long ownerId,
+        String name
+) throws Exception {
+    CreateBusinessRequest request = new CreateBusinessRequest();
+    request.setOwnerId(ownerId);
+    request.setName(name);
+    request.setDescription("Test business");
+    request.setAddress("Hyderabad");
+    request.setTimezone("Asia/Kolkata");
+
+    String response = mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    return objectMapper.readTree(response)
+            .get("id")
+            .asLong();
+}
+
+private void assignStaff(
+        Long businessId,
+        Long staffId
+) throws Exception {
+    AssignStaffRequest request = new AssignStaffRequest();
+    request.setStaffId(staffId);
+
+    mockMvc.perform(
+            post("/api/v1/businesses/{businessId}/staff", businessId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated());
 }
 
 }
