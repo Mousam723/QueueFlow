@@ -305,6 +305,94 @@ class AppointmentControllerIntegrationTest {
                 );
     }
 
+    @Test
+void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
+        throws Exception {
+
+    User customerOne = createCustomer(
+            "appointment-counter-1@test.com"
+    );
+
+    User customerTwo = createCustomer(
+            "appointment-counter-2@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-counter-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    // Initial state
+    Queue initialQueue = queueRepository.findById(queue.getId())
+            .orElseThrow();
+
+    assertEquals(0, initialQueue.getCurrentToken());
+    assertEquals(0, initialQueue.getNextTokenNumber());
+
+    // First appointment should allocate token 1
+    mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customerOne.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(1));
+
+    Queue afterFirstAppointment =
+            queueRepository.findById(queue.getId())
+                    .orElseThrow();
+
+    assertEquals(0, afterFirstAppointment.getCurrentToken());
+    assertEquals(1, afterFirstAppointment.getNextTokenNumber());
+
+    // Advancing the queue should only change currentToken
+    mockMvc.perform(
+            post("/api/v1/queues/{queueId}/next", queue.getId())
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.currentToken").value(1));
+
+    Queue afterQueueAdvance =
+            queueRepository.findById(queue.getId())
+                    .orElseThrow();
+
+    assertEquals(1, afterQueueAdvance.getCurrentToken());
+    assertEquals(1, afterQueueAdvance.getNextTokenNumber());
+
+    // Second appointment should receive token 2
+    mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    customerTwo.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(2));
+
+    Queue finalQueue =
+            queueRepository.findById(queue.getId())
+                    .orElseThrow();
+
+    assertEquals(1, finalQueue.getCurrentToken());
+    assertEquals(2, finalQueue.getNextTokenNumber());
+}
+
     /*
      * ============================================================
      * VALIDATION / ERROR CASES

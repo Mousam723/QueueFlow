@@ -42,6 +42,9 @@ public class Queue {
     @Column(name = "current_token", nullable = false)
     private Integer currentToken;
 
+    @Column(name = "next_token_number", nullable = false)
+    private Integer nextTokenNumber;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -102,6 +105,14 @@ public class Queue {
 
     public void setCurrentToken(Integer currentToken) {
         this.currentToken = currentToken;
+    }
+
+    public Integer getNextTokenNumber() {
+        return nextTokenNumber;
+    }
+
+    public void setNextTokenNumber(Integer nextTokenNumber) {
+        this.nextTokenNumber = nextTokenNumber;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -64,9 +64,8 @@ public class AppointmentService {
             );
         }
 
-        int nextToken = queue.getCurrentToken() + 1;
-        queue.setCurrentToken(nextToken);
-
+        int nextToken = queue.getNextTokenNumber() + 1;
+        queue.setNextTokenNumber(nextToken);
         queueRepository.save(queue);
 
         Appointment appointment = new Appointment();
