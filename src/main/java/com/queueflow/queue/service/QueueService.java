@@ -102,40 +102,92 @@ public class QueueService {
         return QueueResponse.from(getQueueEntity(queueId));
     }
 
+    /**
+     * Advances the queue to the earliest WAITING appointment.
+     *
+     * Lock order:
+     *
+     *     Queue
+     *       ↓
+     *     Appointment
+     *
+     * The queue is locked first so concurrent queue operations
+     * for the same queue are serialized.
+     *
+     * The selected appointment is also pessimistically locked
+     * before changing WAITING -> CALLED.
+     */
     @Transactional
     public QueueResponse advanceQueue(Long queueId) {
 
+        /*
+         * Step 1:
+         * Lock the queue.
+         */
         Queue queue = queueRepository.findByIdForUpdate(queueId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Queue with id " + queueId + " was not found"
                         ));
 
+        /*
+         * Step 2:
+         * Only ACTIVE queues can advance.
+         */
         if (queue.getStatus() != QueueStatus.ACTIVE) {
             throw new ConflictException(
                     "Queue with id " + queueId + " is not active"
             );
         }
 
+        /*
+         * Step 3:
+         * Find the earliest WAITING appointment while
+         * pessimistically locking the appointment rows.
+         *
+         * This prevents another transaction from modifying
+         * the selected appointment while this transaction is
+         * deciding which appointment to call.
+         */
         List<Appointment> waitingAppointments =
                 appointmentRepository
-                        .findByQueueIdAndStatusOrderByTokenNumberAsc(
+                        .findByQueueIdAndStatusForUpdate(
                                 queueId,
                                 AppointmentStatus.WAITING
                         );
 
+        /*
+         * Step 4:
+         * There is nobody waiting.
+         */
         if (waitingAppointments.isEmpty()) {
             throw new ConflictException(
                     "No waiting appointments in queue with id " + queueId
             );
         }
 
+        /*
+         * Step 5:
+         * The repository sorts by token number, so the first
+         * appointment is the next appointment to be called.
+         */
         Appointment nextAppointment = waitingAppointments.get(0);
 
+        /*
+         * Step 6:
+         * Move appointment through its lifecycle.
+         *
+         * WAITING -> CALLED
+         */
         nextAppointment.setStatus(AppointmentStatus.CALLED);
 
         appointmentRepository.save(nextAppointment);
 
+        /*
+         * Step 7:
+         * Queue currentToken represents the token that was
+         * most recently called.
+         */
         queue.setCurrentToken(nextAppointment.getTokenNumber());
 
         Queue savedQueue = queueRepository.save(queue);
