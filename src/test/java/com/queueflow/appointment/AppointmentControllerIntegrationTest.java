@@ -38,7 +38,7 @@ import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -404,6 +404,235 @@ void shouldSafelyAllocateUniqueTokensWithConcurrentRequests()
                     appointment.getStatus()
             );
         }
+
+    } finally {
+        executorService.shutdown();
+    }
+}
+
+@Test
+void shouldMaintainConsistencyWhenBookingAndAdvancingConcurrently()
+        throws Exception {
+
+    Business business = createBusiness(
+            "appointment-race-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    // Create one initial appointment so the queue
+    // always has something available to serve.
+    User initialCustomer = createCustomer(
+            "appointment-race-initial@test.com"
+    );
+
+    mockMvc.perform(
+            post("/api/v1/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                            createAppointmentRequest(
+                                    initialCustomer.getId(),
+                                    queue.getId()
+                            )
+                    )
+    )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.tokenNumber").value(1))
+            .andExpect(jsonPath("$.status").value("WAITING"));
+
+    List<User> concurrentCustomers = new ArrayList<>();
+
+    for (int i = 1; i <= 10; i++) {
+        concurrentCustomers.add(
+                createCustomer(
+                        "appointment-race-" + i + "@test.com"
+                )
+        );
+    }
+
+    ExecutorService executorService =
+            Executors.newFixedThreadPool(20);
+
+    try {
+        List<Callable<Integer>> bookingTasks =
+                new ArrayList<>();
+
+        for (User customer : concurrentCustomers) {
+            bookingTasks.add(() -> {
+                String response = mockMvc.perform(
+                        post("/api/v1/appointments")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        createAppointmentRequest(
+                                                customer.getId(),
+                                                queue.getId()
+                                        )
+                                )
+                )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+                JsonNode jsonNode =
+                        objectMapper.readTree(response);
+
+                return jsonNode.get("tokenNumber").asInt();
+            });
+        }
+
+        List<Callable<Integer>> advanceTasks =
+                new ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            advanceTasks.add(() -> {
+                var result = mockMvc.perform(
+                        post(
+                                "/api/v1/queues/{queueId}/next",
+                                queue.getId()
+                        )
+                ).andReturn();
+
+                int status = result.getResponse().getStatus();
+
+                if (status == 409) {
+                    return -1;
+                }
+
+                assertEquals(200, status);
+
+                JsonNode jsonNode =
+                        objectMapper.readTree(
+                                result.getResponse()
+                                        .getContentAsString()
+                        );
+
+                return jsonNode.get("currentToken").asInt();
+            });
+        }
+
+        List<Callable<Integer>> allTasks =
+                new ArrayList<>();
+
+        allTasks.addAll(bookingTasks);
+        allTasks.addAll(advanceTasks);
+
+        List<Future<Integer>> futures =
+                executorService.invokeAll(allTasks);
+
+        List<Integer> bookingTokens =
+                new ArrayList<>();
+
+        for (int i = 0; i < bookingTasks.size(); i++) {
+            bookingTokens.add(futures.get(i).get());
+        }
+
+        List<Integer> successfulAdvanceTokens =
+                new ArrayList<>();
+
+        for (int i = bookingTasks.size();
+             i < futures.size();
+             i++) {
+
+            int token = futures.get(i).get();
+
+            if (token != -1) {
+                successfulAdvanceTokens.add(token);
+            }
+        }
+
+        // 10 concurrent bookings must receive
+        // unique tokens 2 through 11.
+        assertEquals(10, bookingTokens.size());
+        assertEquals(
+                10,
+                bookingTokens.stream().distinct().count()
+        );
+
+        bookingTokens.sort(Integer::compareTo);
+
+        assertEquals(
+                List.of(2, 3, 4, 5, 6, 7, 8, 9, 10, 11),
+                bookingTokens
+        );
+
+        // At least the initial appointment must have
+        // been successfully served.
+        assertEquals(
+                true,
+                successfulAdvanceTokens.size() >= 1
+        );
+
+        // Successful advances must themselves be sequential.
+        successfulAdvanceTokens.sort(Integer::compareTo);
+
+        for (int i = 0;
+             i < successfulAdvanceTokens.size();
+             i++) {
+
+            assertEquals(
+                    i + 1,
+                    successfulAdvanceTokens.get(i)
+            );
+        }
+
+        Queue finalQueue =
+                queueRepository.findById(queue.getId())
+                        .orElseThrow();
+
+        // 1 initial appointment + 10 concurrent bookings.
+        assertEquals(11, finalQueue.getNextTokenNumber());
+
+        // currentToken must match the last successfully
+        // served appointment.
+        assertEquals(
+                successfulAdvanceTokens.get(
+                        successfulAdvanceTokens.size() - 1
+                ),
+                finalQueue.getCurrentToken()
+        );
+
+        List<Appointment> appointments =
+                appointmentRepository
+                        .findByQueueIdOrderByTokenNumberAsc(
+                                queue.getId()
+                        );
+
+        assertEquals(11, appointments.size());
+
+        for (int i = 0; i < appointments.size(); i++) {
+            Appointment appointment = appointments.get(i);
+
+            assertEquals(
+                    i + 1,
+                    appointment.getTokenNumber()
+            );
+
+            assertTrue(
+                    appointment.getStatus()
+                            == AppointmentStatus.WAITING
+                    || appointment.getStatus()
+                            == AppointmentStatus.CALLED
+            );
+        }
+
+        long calledCount =
+                appointments.stream()
+                        .filter(appointment ->
+                                appointment.getStatus()
+                                        == AppointmentStatus.CALLED)
+                        .count();
+
+        assertEquals(
+                successfulAdvanceTokens.size(),
+                calledCount
+        );
 
     } finally {
         executorService.shutdown();
