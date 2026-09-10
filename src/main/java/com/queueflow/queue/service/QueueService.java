@@ -1,10 +1,13 @@
 package com.queueflow.queue.service;
 
+import com.queueflow.appointment.Appointment;
+import com.queueflow.appointment.AppointmentRepository;
+import com.queueflow.appointment.AppointmentStatus;
 import com.queueflow.business.Business;
 import com.queueflow.business.BusinessRepository;
-import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.common.exception.BadRequestException;
 import com.queueflow.common.exception.ConflictException;
+import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
 import com.queueflow.queue.QueueStatus;
@@ -12,10 +15,6 @@ import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.service.Service;
 import com.queueflow.service.ServiceRepository;
-import com.queueflow.appointment.Appointment;
-import com.queueflow.appointment.AppointmentRepository;
-import com.queueflow.appointment.AppointmentStatus;
-
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -28,6 +27,7 @@ public class QueueService {
     private final BusinessRepository businessRepository;
     private final ServiceRepository serviceRepository;
     private final AppointmentRepository appointmentRepository;
+
     public QueueService(
             QueueRepository queueRepository,
             BusinessRepository businessRepository,
@@ -99,46 +99,49 @@ public class QueueService {
 
     @Transactional(readOnly = true)
     public QueueResponse getQueue(Long queueId) {
-
         return QueueResponse.from(getQueueEntity(queueId));
     }
 
     @Transactional
-public QueueResponse advanceQueue(Long queueId) {
-    Queue queue = queueRepository.findByIdForUpdate(queueId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                    "Queue with id " + queueId + " was not found"
-            ));
+    public QueueResponse advanceQueue(Long queueId) {
 
-    if (queue.getStatus() != QueueStatus.ACTIVE) {
-        throw new ConflictException(
-                "Queue with id " + queueId + " is not active"
-        );
+        Queue queue = queueRepository.findByIdForUpdate(queueId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Queue with id " + queueId + " was not found"
+                        ));
+
+        if (queue.getStatus() != QueueStatus.ACTIVE) {
+            throw new ConflictException(
+                    "Queue with id " + queueId + " is not active"
+            );
+        }
+
+        List<Appointment> waitingAppointments =
+                appointmentRepository
+                        .findByQueueIdAndStatusOrderByTokenNumberAsc(
+                                queueId,
+                                AppointmentStatus.WAITING
+                        );
+
+        if (waitingAppointments.isEmpty()) {
+            throw new ConflictException(
+                    "No waiting appointments in queue with id " + queueId
+            );
+        }
+
+        Appointment nextAppointment = waitingAppointments.get(0);
+
+        nextAppointment.setStatus(AppointmentStatus.CALLED);
+
+        appointmentRepository.save(nextAppointment);
+
+        queue.setCurrentToken(nextAppointment.getTokenNumber());
+
+        Queue savedQueue = queueRepository.save(queue);
+
+        return QueueResponse.from(savedQueue);
     }
-
-    List<Appointment> waitingAppointments =
-            appointmentRepository
-                    .findByQueueIdAndStatusOrderByTokenNumberAsc(
-                            queueId,
-                            AppointmentStatus.WAITING
-                    );
-
-    if (waitingAppointments.isEmpty()) {
-        throw new ConflictException(
-                "No waiting appointments in queue with id " + queueId
-        );
-    }
-
-    Appointment nextAppointment = waitingAppointments.get(0);
-
-    nextAppointment.setStatus(AppointmentStatus.CALLED);
-    appointmentRepository.save(nextAppointment);
-
-    queue.setCurrentToken(nextAppointment.getTokenNumber());
-    Queue savedQueue = queueRepository.save(queue);
-
-    return QueueResponse.from(savedQueue);
-}
 
     @Transactional(readOnly = true)
     public List<QueueResponse> getBusinessQueues(
@@ -165,56 +168,78 @@ public QueueResponse advanceQueue(Long queueId) {
     @Transactional
     public QueueResponse pauseQueue(Long queueId) {
 
-        Queue queue = getQueueEntity(queueId);
+        Queue queue = getQueueEntityForUpdate(queueId);
 
-        if (queue.getStatus() != QueueStatus.ACTIVE) {
+        if (!queue.getStatus().canTransitionTo(QueueStatus.PAUSED)) {
             throw new ConflictException(
-                    "Queue with id " + queueId + " cannot be paused from status "
+                    "Queue with id " + queueId
+                            + " cannot transition from "
                             + queue.getStatus()
+                            + " to PAUSED"
             );
         }
 
         queue.setStatus(QueueStatus.PAUSED);
 
-        return QueueResponse.from(queueRepository.save(queue));
+        return QueueResponse.from(
+                queueRepository.save(queue)
+        );
     }
 
     @Transactional
     public QueueResponse resumeQueue(Long queueId) {
 
-        Queue queue = getQueueEntity(queueId);
+        Queue queue = getQueueEntityForUpdate(queueId);
 
-        if (queue.getStatus() != QueueStatus.PAUSED) {
+        if (!queue.getStatus().canTransitionTo(QueueStatus.ACTIVE)) {
             throw new ConflictException(
-                    "Queue with id " + queueId + " cannot be resumed from status "
+                    "Queue with id " + queueId
+                            + " cannot transition from "
                             + queue.getStatus()
+                            + " to ACTIVE"
             );
         }
 
         queue.setStatus(QueueStatus.ACTIVE);
 
-        return QueueResponse.from(queueRepository.save(queue));
+        return QueueResponse.from(
+                queueRepository.save(queue)
+        );
     }
 
     @Transactional
     public QueueResponse closeQueue(Long queueId) {
 
-        Queue queue = getQueueEntity(queueId);
+        Queue queue = getQueueEntityForUpdate(queueId);
 
-        if (queue.getStatus() == QueueStatus.CLOSED) {
+        if (!queue.getStatus().canTransitionTo(QueueStatus.CLOSED)) {
             throw new ConflictException(
-                    "Queue with id " + queueId + " is already closed"
+                    "Queue with id " + queueId
+                            + " cannot transition from "
+                            + queue.getStatus()
+                            + " to CLOSED"
             );
         }
 
         queue.setStatus(QueueStatus.CLOSED);
 
-        return QueueResponse.from(queueRepository.save(queue));
+        return QueueResponse.from(
+                queueRepository.save(queue)
+        );
     }
 
     private Queue getQueueEntity(Long queueId) {
 
         return queueRepository.findById(queueId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Queue with id " + queueId + " was not found"
+                        ));
+    }
+
+    private Queue getQueueEntityForUpdate(Long queueId) {
+
+        return queueRepository.findByIdForUpdate(queueId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Queue with id " + queueId + " was not found"
