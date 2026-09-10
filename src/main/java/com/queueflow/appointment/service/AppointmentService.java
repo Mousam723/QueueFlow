@@ -14,7 +14,7 @@ import com.queueflow.queue.QueueStatus;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -84,32 +84,46 @@ public class AppointmentService {
     }
 
     @Transactional
-    public AppointmentResponse callAppointment(Long appointmentId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Appointment with id " + appointmentId
-                                + " was not found"
-                ));
+public AppointmentResponse callAppointment(Long appointmentId) {
+    Appointment appointment = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId + " was not found"));
 
-        if (appointment.getStatus() != AppointmentStatus.WAITING) {
-            throw new ConflictException(
-                    "Appointment with id " + appointmentId
-                            + " cannot be called from status "
-                            + appointment.getStatus()
-            );
-        }
+    Long queueId = appointment.getQueue().getId();
 
-        appointment.setStatus(AppointmentStatus.CALLED);
+    Queue queue = queueRepository.findByIdForUpdate(queueId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Queue with id " + queueId + " was not found"));
 
-        return AppointmentResponse.from(
-                appointmentRepository.save(appointment)
-        );
+    Appointment lockedAppointment = appointmentRepository.findByIdForUpdate(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Appointment with id " + appointmentId + " was not found"));
+
+    if (lockedAppointment.getStatus() != AppointmentStatus.WAITING) {
+        throw new ConflictException(
+                "Appointment with id " + appointmentId
+                        + " cannot transition from "
+                        + lockedAppointment.getStatus() + " to CALLED");
     }
+
+    if (queue.getStatus() != QueueStatus.ACTIVE) {
+        throw new ConflictException(
+                "Queue with id " + queueId + " is not active");
+    }
+
+    lockedAppointment.setStatus(AppointmentStatus.CALLED);
+    queue.setCurrentToken(lockedAppointment.getTokenNumber());
+
+    appointmentRepository.save(lockedAppointment);
+    queueRepository.save(queue);
+
+    return AppointmentResponse.from(lockedAppointment);
+}
 
 
     @Transactional
     public AppointmentResponse startAppointment(Long appointmentId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
+        Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Appointment with id " + appointmentId
                                 + " was not found"
@@ -132,7 +146,7 @@ public class AppointmentService {
 
     @Transactional
 public AppointmentResponse completeAppointment(Long appointmentId) {
-    Appointment appointment = appointmentRepository.findById(appointmentId)
+    Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(
                     "Appointment with id " + appointmentId
                             + " was not found"
@@ -155,7 +169,7 @@ public AppointmentResponse completeAppointment(Long appointmentId) {
 
 @Transactional
 public AppointmentResponse cancelAppointment(Long appointmentId) {
-    Appointment appointment = appointmentRepository.findById(appointmentId)
+    Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(
                     "Appointment with id " + appointmentId
                             + " was not found"
@@ -179,9 +193,10 @@ public AppointmentResponse cancelAppointment(Long appointmentId) {
     );
 }
 
-@Transactional
+@Transactional(readOnly = true)
 public AppointmentResponse getAppointment(Long appointmentId) {
-    Appointment appointment = appointmentRepository.findById(appointmentId)
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(
                     "Appointment with id " + appointmentId
                             + " was not found"
