@@ -993,9 +993,13 @@ void shouldRejectAppointmentForNonCustomerUser() throws Exception {
 
 @Test
 void shouldCallWaitingAppointment() throws Exception {
+
     User customer = createCustomer("appointment-call@test.com");
+
     Business business = createBusiness("appointment-call-business@test.com");
+
     Service service = createService(business);
+
     Queue queue = createQueue(
             business,
             service,
@@ -1015,10 +1019,15 @@ void shouldCallWaitingAppointment() throws Exception {
             .getResponse()
             .getContentAsString();
 
-    Long appointmentId = objectMapper
-            .readTree(response)
+    JsonNode appointmentJson = objectMapper.readTree(response);
+
+    Long appointmentId = appointmentJson
             .get("id")
             .asLong();
+
+    Integer tokenNumber = appointmentJson
+            .get("tokenNumber")
+            .asInt();
 
     mockMvc.perform(
             post("/api/v1/appointments/{appointmentId}/call", appointmentId)
@@ -1026,6 +1035,14 @@ void shouldCallWaitingAppointment() throws Exception {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(appointmentId))
             .andExpect(jsonPath("$.status").value("CALLED"));
+
+    Queue updatedQueue = queueRepository.findById(queue.getId())
+            .orElseThrow();
+
+    assertEquals(
+            tokenNumber,
+            updatedQueue.getCurrentToken()
+    );
 }
 
 @Test
