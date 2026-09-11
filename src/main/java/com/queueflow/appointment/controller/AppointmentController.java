@@ -20,12 +20,13 @@ public class AppointmentController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public AppointmentResponse createAppointment(
-            @Valid @RequestBody CreateAppointmentRequest request
-    ) {
-        return appointmentService.createAppointment(request);
-    }
+@ResponseStatus(HttpStatus.CREATED)
+public AppointmentResponse createAppointment(
+        @RequestHeader("Idempotency-Key") String idempotencyKey,
+        @Valid @RequestBody CreateAppointmentRequest request
+) {
+    return appointmentService.createAppointment(request, idempotencyKey);
+}
 
     @PostMapping("/{appointmentId}/call")
     @ResponseStatus(HttpStatus.OK)

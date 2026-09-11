@@ -24,6 +24,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.MvcResult;
 
 import tools.jackson.databind.JsonNode;
@@ -185,6 +186,24 @@ class AppointmentControllerIntegrationTest {
         return objectMapper.writeValueAsString(request);
     }
 
+    private RequestBuilder createAppointmentPost(
+            Long customerId,
+            Long queueId
+    ) throws Exception {
+        return post("/api/v1/appointments")
+                .header(
+                        "Idempotency-Key",
+                        java.util.UUID.randomUUID().toString()
+                )
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                        createAppointmentRequest(
+                                customerId,
+                                queueId
+                        )
+                );
+    }
+
     /*
      * ============================================================
      * APPOINTMENT CREATION
@@ -211,14 +230,10 @@ class AppointmentControllerIntegrationTest {
         );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customer.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
@@ -276,14 +291,10 @@ class AppointmentControllerIntegrationTest {
         );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customerOne.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customerOne.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isCreated())
                 .andExpect(
@@ -291,14 +302,10 @@ class AppointmentControllerIntegrationTest {
                 );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customerTwo.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customerTwo.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isCreated())
                 .andExpect(
@@ -341,14 +348,10 @@ void shouldSafelyAllocateUniqueTokensWithConcurrentRequests()
         for (User customer : customers) {
             tasks.add(() -> {
                 String response = mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customer.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -434,14 +437,10 @@ void shouldMaintainConsistencyWhenBookingAndAdvancingConcurrently()
     );
 
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    initialCustomer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        initialCustomer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(1))
@@ -467,14 +466,10 @@ void shouldMaintainConsistencyWhenBookingAndAdvancingConcurrently()
         for (User customer : concurrentCustomers) {
             bookingTasks.add(() -> {
                 String response = mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customer.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -673,14 +668,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
 
     // First appointment should allocate token 1
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customerOne.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customerOne.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(1));
@@ -708,14 +699,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
 
     // Second appointment should receive token 2
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customerTwo.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customerTwo.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(2));
@@ -751,14 +738,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
         );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        999999L,
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        999999L,
+                        queue.getId()
+                )
         )
                 .andExpect(status().isNotFound());
     }
@@ -772,14 +755,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
         );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customer.getId(),
-                                        999999L
-                                )
-                        )
+                createAppointmentPost(
+                        customer.getId(),
+                        999999L
+                )
         )
                 .andExpect(status().isNotFound());
     }
@@ -810,14 +789,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
                 .andExpect(status().isOk());
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customer.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isConflict());
     }
@@ -848,14 +823,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
                 .andExpect(status().isOk());
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customer.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isConflict());
     }
@@ -904,16 +875,10 @@ void shouldKeepAppointmentAllocationSeparateFromQueueAdvancement()
                 tasks.add(() -> {
 
                     String response = mockMvc.perform(
-                            post("/api/v1/appointments")
-                                    .contentType(
-                                            MediaType.APPLICATION_JSON
-                                    )
-                                    .content(
-                                            createAppointmentRequest(
-                                                    customer.getId(),
-                                                    queue.getId()
-                                            )
-                                    )
+                            createAppointmentPost(
+                                    customer.getId(),
+                                    queue.getId()
+                            )
                     )
                             .andExpect(status().isCreated())
                             .andReturn()
@@ -980,14 +945,10 @@ void shouldRejectAppointmentForNonCustomerUser() throws Exception {
     );
 
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    businessOwner.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        businessOwner.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isConflict());
 }
@@ -1008,12 +969,10 @@ void shouldCallWaitingAppointment() throws Exception {
     );
 
     String response = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(createAppointmentRequest(
-                            customer.getId(),
-                            queue.getId()
-                    ))
+            createAppointmentPost(
+                    customer.getId(),
+                    queue.getId()
+            )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1058,12 +1017,10 @@ void shouldRejectCallingAlreadyCalledAppointment() throws Exception {
     );
 
     String response = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(createAppointmentRequest(
-                            customer.getId(),
-                            queue.getId()
-                    ))
+            createAppointmentPost(
+                    customer.getId(),
+                    queue.getId()
+            )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1112,14 +1069,10 @@ void shouldStartCalledAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1164,14 +1117,10 @@ void shouldRejectStartingWaitingAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1218,14 +1167,10 @@ void shouldCompleteInServiceAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1281,14 +1226,10 @@ void shouldRejectCompletingWaitingAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1325,14 +1266,10 @@ void shouldRejectCompletingCalledAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1378,14 +1315,10 @@ void shouldRejectCompletingAlreadyCompletedAppointment()
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1452,14 +1385,10 @@ void shouldCancelWaitingAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1498,14 +1427,10 @@ void shouldCancelCalledAppointment() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1552,14 +1477,10 @@ void shouldRejectCancellingInServiceAppointment()
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1608,14 +1529,10 @@ void shouldRejectCancellingCompletedAppointment()
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -1669,14 +1586,10 @@ void shouldMarkCalledAppointmentAsNoShow() throws Exception {
 
     // Create appointment
     MvcResult createResult = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(1))
@@ -1743,14 +1656,10 @@ void shouldRejectMarkingWaitingAppointmentAsNoShow()
     );
 
     MvcResult createResult = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("WAITING"))
@@ -1796,14 +1705,10 @@ void shouldRejectMarkingInServiceAppointmentAsNoShow()
     );
 
     MvcResult createResult = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn();
@@ -1862,14 +1767,10 @@ void shouldRejectMarkingCompletedAppointmentAsNoShow()
     );
 
     MvcResult createResult = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn();
@@ -1935,14 +1836,10 @@ void shouldRejectMarkingCancelledAppointmentAsNoShow()
     );
 
     MvcResult createResult = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn();
@@ -2014,14 +1911,10 @@ void shouldGetAppointmentById() throws Exception {
     );
 
     String createResponse = mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andReturn()
@@ -2089,14 +1982,10 @@ void shouldGetCustomerAppointments() throws Exception {
 
     // First appointment
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(1));
@@ -2105,14 +1994,10 @@ void shouldGetCustomerAppointments() throws Exception {
     // This is allowed because appointments currently do not
     // restrict a customer from joining the same queue twice.
     mockMvc.perform(
-            post("/api/v1/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            createAppointmentRequest(
-                                    customer.getId(),
-                                    queue.getId()
-                            )
-                    )
+            createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
     )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.tokenNumber").value(2));
@@ -2202,41 +2087,29 @@ void shouldRejectAppointmentHistoryForNonCustomerUser()
         );
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customerOne.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customerOne.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tokenNumber").value(1));
 
         mockMvc.perform(
-                post("/api/v1/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                createAppointmentRequest(
-                                        customerTwo.getId(),
-                                        queue.getId()
-                                )
-                        )
+                createAppointmentPost(
+                        customerTwo.getId(),
+                        queue.getId()
+                )
         )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tokenNumber").value(2));
 
         String thirdAppointmentResponse =
                 mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customerThree.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customerThree.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -2288,14 +2161,10 @@ void shouldRejectAppointmentHistoryForNonCustomerUser()
 
         String response =
                 mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customer.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -2347,14 +2216,10 @@ void shouldRejectAppointmentHistoryForNonCustomerUser()
 
         String response =
                 mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customer.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -2414,14 +2279,10 @@ void shouldRejectAppointmentHistoryForNonCustomerUser()
 
         String response =
                 mockMvc.perform(
-                        post("/api/v1/appointments")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        createAppointmentRequest(
-                                                customer.getId(),
-                                                queue.getId()
-                                        )
-                                )
+                        createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
                 )
                         .andExpect(status().isCreated())
                         .andReturn()

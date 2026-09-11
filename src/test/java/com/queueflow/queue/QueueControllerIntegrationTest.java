@@ -186,6 +186,9 @@ class QueueControllerIntegrationTest {
             .orElseThrow();
 
     Appointment appointment = new Appointment();
+    appointment.setIdempotencyKey(
+        "test-" + java.util.UUID.randomUUID()
+);
     appointment.setCustomer(customer);
     appointment.setBusiness(business);
     appointment.setService(service);

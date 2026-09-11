@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface AppointmentRepository
         extends JpaRepository<Appointment, Long> {
 
+    Optional<Appointment> findByIdempotencyKey(String idempotencyKey);
     List<Appointment> findByQueueIdOrderByTokenNumberAsc(Long queueId);
 
     List<Appointment> findByCustomerIdOrderByCreatedAtDesc(Long customerId);

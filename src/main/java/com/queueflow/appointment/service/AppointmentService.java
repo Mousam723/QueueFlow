@@ -8,6 +8,7 @@ import com.queueflow.appointment.dto.CreateAppointmentRequest;
 import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.appointment.dto.QueuePositionResponse;
+import com.queueflow.common.exception.BadRequestException;
 import java.util.List;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
@@ -36,9 +37,40 @@ public class AppointmentService {
     }
 
     @Transactional
+public AppointmentResponse createAppointment(
+        CreateAppointmentRequest request
+) {
+    return createAppointment(
+            request,
+            "legacy-" + java.util.UUID.randomUUID()
+    );
+}
+
+    @Transactional
     public AppointmentResponse createAppointment(
-            CreateAppointmentRequest request
+            CreateAppointmentRequest request,
+            String idempotencyKey
     ) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BadRequestException(
+                    "Idempotency-Key header must not be blank"
+            );
+        }
+
+        if (idempotencyKey.length() > 100) {
+            throw new BadRequestException(
+                    "Idempotency-Key header must not exceed 100 characters"
+            );
+        }
+
+        Appointment existingAppointment =
+            appointmentRepository.findByIdempotencyKey(idempotencyKey)
+                    .orElse(null);
+
+    if (existingAppointment != null) {
+        return AppointmentResponse.from(existingAppointment);
+    }
+
         User customer = userRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Customer with id " + request.getCustomerId()
@@ -70,6 +102,7 @@ public class AppointmentService {
         queueRepository.save(queue);
 
         Appointment appointment = new Appointment();
+        appointment.setIdempotencyKey(idempotencyKey);
         appointment.setCustomer(customer);
         appointment.setBusiness(queue.getBusiness());
         appointment.setService(queue.getService());

@@ -25,6 +25,9 @@ public class Appointment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "idempotency_key", nullable = false, length = 100, unique = true)
+private String idempotencyKey;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
@@ -71,6 +74,14 @@ public class Appointment {
 
     public Long getId() {
         return id;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public User getCustomer() {
@@ -136,4 +147,5 @@ public class Appointment {
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
+
 }
