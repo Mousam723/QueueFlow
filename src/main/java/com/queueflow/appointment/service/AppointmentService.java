@@ -9,6 +9,9 @@ import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.appointment.dto.QueuePositionResponse;
 import com.queueflow.common.exception.BadRequestException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
@@ -63,13 +66,26 @@ public AppointmentResponse createAppointment(
             );
         }
 
-        Appointment existingAppointment =
-            appointmentRepository.findByIdempotencyKey(idempotencyKey)
-                    .orElse(null);
+        String requestFingerprint =
+        generateRequestFingerprint(request);
 
-    if (existingAppointment != null) {
-        return AppointmentResponse.from(existingAppointment);
+Appointment existingAppointment =
+        appointmentRepository.findByIdempotencyKey(idempotencyKey)
+                .orElse(null);
+
+if (existingAppointment != null) {
+
+    if (!requestFingerprint.equals(
+            existingAppointment.getRequestFingerprint()
+    )) {
+        throw new ConflictException(
+                "Idempotency-Key has already been used "
+                        + "with a different request payload"
+        );
     }
+
+    return AppointmentResponse.from(existingAppointment);
+}
 
         User customer = userRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -103,6 +119,7 @@ public AppointmentResponse createAppointment(
 
         Appointment appointment = new Appointment();
         appointment.setIdempotencyKey(idempotencyKey);
+        appointment.setRequestFingerprint(requestFingerprint);
         appointment.setCustomer(customer);
         appointment.setBusiness(queue.getBusiness());
         appointment.setService(queue.getService());
@@ -334,5 +351,35 @@ public List<AppointmentResponse> getCustomerAppointments(
             .toList();
 }
 
+private String generateRequestFingerprint(
+    CreateAppointmentRequest request
+) {
+String payload =
+        request.getCustomerId() + ":" + request.getQueueId();
+
+try {
+    MessageDigest digest =
+            MessageDigest.getInstance("SHA-256");
+
+    byte[] hash =
+            digest.digest(
+                    payload.getBytes(StandardCharsets.UTF_8)
+            );
+
+    StringBuilder hex = new StringBuilder();
+
+    for (byte b : hash) {
+        hex.append(String.format("%02x", b));
+    }
+
+    return hex.toString();
+
+} catch (NoSuchAlgorithmException e) {
+    throw new IllegalStateException(
+            "SHA-256 algorithm is not available",
+            e
+    );
+}
+}
 
 }

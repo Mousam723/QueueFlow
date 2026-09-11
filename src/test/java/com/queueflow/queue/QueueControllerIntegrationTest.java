@@ -189,6 +189,9 @@ class QueueControllerIntegrationTest {
     appointment.setIdempotencyKey(
         "test-" + java.util.UUID.randomUUID()
 );
+    appointment.setRequestFingerprint(
+        java.util.UUID.randomUUID().toString()
+    );
     appointment.setCustomer(customer);
     appointment.setBusiness(business);
     appointment.setService(service);

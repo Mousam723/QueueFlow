@@ -204,6 +204,25 @@ class AppointmentControllerIntegrationTest {
                 );
     }
 
+    private RequestBuilder createAppointmentPost(
+        Long customerId,
+        Long queueId,
+        String idempotencyKey
+    ) throws Exception {
+        return post("/api/v1/appointments")
+            .header(
+                    "Idempotency-Key",
+                    idempotencyKey
+            )
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                    createAppointmentRequest(
+                            customerId,
+                            queueId
+                    )
+            );
+    }
+
     /*
      * ============================================================
      * APPOINTMENT CREATION
@@ -266,6 +285,130 @@ class AppointmentControllerIntegrationTest {
                                 .value("WAITING")
                 );
     }
+
+    @Test
+void shouldReturnExistingAppointmentForSameIdempotencyKeyAndSamePayload()
+        throws Exception {
+
+    User customer = createCustomer(
+            "appointment-idempotency-same@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-idempotency-same-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String idempotencyKey = "idempotency-same-key";
+
+    String firstResponse =
+            mockMvc.perform(
+                    createAppointmentPost(
+                            customer.getId(),
+                            queue.getId(),
+                            idempotencyKey
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(
+                    jsonPath("$.tokenNumber")
+                            .value(1)
+            )
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    String secondResponse =
+            mockMvc.perform(
+                    createAppointmentPost(
+                            customer.getId(),
+                            queue.getId(),
+                            idempotencyKey
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(
+                    jsonPath("$.tokenNumber")
+                            .value(1)
+            )
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    long firstId =
+            objectMapper.readTree(firstResponse)
+                    .get("id")
+                    .asLong();
+
+    long secondId =
+            objectMapper.readTree(secondResponse)
+                    .get("id")
+                    .asLong();
+
+    org.junit.jupiter.api.Assertions.assertEquals(
+            firstId,
+            secondId
+    );
+}
+
+@Test
+void shouldRejectSameIdempotencyKeyWithDifferentPayload()
+        throws Exception {
+
+    User customerOne = createCustomer(
+            "appointment-idempotency-different-1@test.com"
+    );
+
+    User customerTwo = createCustomer(
+            "appointment-idempotency-different-2@test.com"
+    );
+
+    Business business = createBusiness(
+            "appointment-idempotency-different-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    String idempotencyKey = "idempotency-different-key";
+
+    mockMvc.perform(
+            createAppointmentPost(
+                    customerOne.getId(),
+                    queue.getId(),
+                    idempotencyKey
+            )
+    )
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(
+            createAppointmentPost(
+                    customerTwo.getId(),
+                    queue.getId(),
+                    idempotencyKey
+            )
+    )
+            .andExpect(status().isConflict())
+            .andExpect(
+                    jsonPath("$.message")
+                            .value(
+                                    "Idempotency-Key has already been used "
+                                            + "with a different request payload"
+                            )
+            );
+}
 
     @Test
     void shouldAssignSequentialTokens() throws Exception {
