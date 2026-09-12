@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
 import com.queueflow.queue.QueueStatus;
@@ -28,19 +29,23 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final QueueRepository queueRepository;
     private final UserRepository userRepository;
+    private final AppointmentCreationTransactionService appointmentCreationTransactionService;
 
     public AppointmentService(
             AppointmentRepository appointmentRepository,
             QueueRepository queueRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            AppointmentCreationTransactionService
+                appointmentCreationTransactionService
     ) {
         this.appointmentRepository = appointmentRepository;
         this.queueRepository = queueRepository;
         this.userRepository = userRepository;
+        this.appointmentCreationTransactionService =
+                appointmentCreationTransactionService;
     }
 
-    @Transactional
-public AppointmentResponse createAppointment(
+    public AppointmentResponse createAppointment(
         CreateAppointmentRequest request
 ) {
     return createAppointment(
@@ -49,90 +54,88 @@ public AppointmentResponse createAppointment(
     );
 }
 
-    @Transactional
-    public AppointmentResponse createAppointment(
-            CreateAppointmentRequest request,
-            String idempotencyKey
-    ) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new BadRequestException(
-                    "Idempotency-Key header must not be blank"
-            );
-        }
-
-        if (idempotencyKey.length() > 100) {
-            throw new BadRequestException(
-                    "Idempotency-Key header must not exceed 100 characters"
-            );
-        }
-
-        String requestFingerprint =
-        generateRequestFingerprint(request);
-
-Appointment existingAppointment =
-        appointmentRepository.findByIdempotencyKey(idempotencyKey)
-                .orElse(null);
-
-if (existingAppointment != null) {
-
-    if (!requestFingerprint.equals(
-            existingAppointment.getRequestFingerprint()
-    )) {
-        throw new ConflictException(
-                "Idempotency-Key has already been used "
-                        + "with a different request payload"
+public AppointmentResponse createAppointment(
+        CreateAppointmentRequest request,
+        String idempotencyKey
+) {
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+        throw new BadRequestException(
+                "Idempotency-Key header must not be blank"
         );
     }
 
-    return AppointmentResponse.from(existingAppointment);
+    if (idempotencyKey.length() > 100) {
+        throw new BadRequestException(
+                "Idempotency-Key header must not exceed 100 characters"
+        );
+    }
+
+
+
+    String requestFingerprint =
+            generateRequestFingerprint(request);
+
+    Appointment existingAppointment =
+            appointmentRepository.findByIdempotencyKey(idempotencyKey)
+                    .orElse(null);
+
+    if (existingAppointment != null) {
+        return resolveExistingAppointment(
+                existingAppointment,
+                requestFingerprint
+        );
+    }
+
+    try {
+        Appointment createdAppointment =
+                appointmentCreationTransactionService.createAppointment(
+                        request,
+                        idempotencyKey,
+                        requestFingerprint
+                );
+
+        return AppointmentResponse.from(createdAppointment);
+
+    } catch (DataIntegrityViolationException exception) {
+
+        /*
+         * Another transaction may have created the same
+         * idempotency key concurrently.
+         *
+         * The transaction that attempted the duplicate insert
+         * has already rolled back before this catch block runs.
+         */
+        Appointment concurrentAppointment =
+                appointmentRepository
+                        .findByIdempotencyKey(idempotencyKey)
+                        .orElse(null);
+
+        if (concurrentAppointment == null) {
+            throw exception;
+        }
+
+        return resolveExistingAppointment(
+                concurrentAppointment,
+                requestFingerprint
+        );
+    }
 }
 
-        User customer = userRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Customer with id " + request.getCustomerId()
-                                + " was not found"
-                ));
+private AppointmentResponse resolveExistingAppointment(
+    Appointment existingAppointment,
+    String requestFingerprint
+) {
+if (!requestFingerprint.equals(
+        existingAppointment.getRequestFingerprint()
+)) {
+    throw new ConflictException(
+            "Idempotency-Key has already been used "
+                    + "with a different request payload"
+    );
+}
 
-        Queue queue = queueRepository.findByIdForUpdate(request.getQueueId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Queue with id " + request.getQueueId()
-                                + " was not found"
-                ));
-
-        if (customer.getRole() != UserRole.CUSTOMER) {
-            throw new ConflictException(
-                    "User with id " + customer.getId()
-                            + " is not a customer"
-            );
-        }
-
-        if (queue.getStatus() != QueueStatus.ACTIVE) {
-            throw new ConflictException(
-                    "Queue with id " + queue.getId()
-                            + " is not active"
-            );
-        }
-
-        int nextToken = queue.getNextTokenNumber() + 1;
-        queue.setNextTokenNumber(nextToken);
-        queueRepository.save(queue);
-
-        Appointment appointment = new Appointment();
-        appointment.setIdempotencyKey(idempotencyKey);
-        appointment.setRequestFingerprint(requestFingerprint);
-        appointment.setCustomer(customer);
-        appointment.setBusiness(queue.getBusiness());
-        appointment.setService(queue.getService());
-        appointment.setQueue(queue);
-        appointment.setTokenNumber(nextToken);
-        appointment.setAppointmentDate(queue.getQueueDate());
-        appointment.setStatus(AppointmentStatus.WAITING);
-
-        Appointment savedAppointment =
-                appointmentRepository.save(appointment);
-
-        return AppointmentResponse.from(savedAppointment);
-    }
+return AppointmentResponse.from(existingAppointment);
+}
 
     @Transactional
 public AppointmentResponse callAppointment(Long appointmentId) {
