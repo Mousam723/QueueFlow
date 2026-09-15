@@ -15,6 +15,8 @@ import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.service.Service;
 import com.queueflow.service.ServiceRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -22,6 +24,8 @@ import java.util.List;
 
 @org.springframework.stereotype.Service
 public class QueueService {
+    private static final Logger log =
+        LoggerFactory.getLogger(QueueService.class);
 
     private final QueueRepository queueRepository;
     private final BusinessRepository businessRepository;
@@ -93,6 +97,14 @@ public class QueueService {
         queue.setNextTokenNumber(0);
 
         Queue savedQueue = queueRepository.save(queue);
+
+        log.info(
+            "queue.created queueId={} businessId={} serviceId={} queueDate={}",
+            savedQueue.getId(),
+            businessId,
+            service.getId(),
+            queueDate
+        );
 
         return QueueResponse.from(savedQueue);
     }
@@ -192,6 +204,13 @@ public class QueueService {
 
         Queue savedQueue = queueRepository.save(queue);
 
+        log.info(
+            "queue.advanced queueId={} tokenNumber={} appointmentId={}",
+            queueId,
+            nextAppointment.getTokenNumber(),
+            nextAppointment.getId()
+        );
+
         return QueueResponse.from(savedQueue);
     }
 
@@ -233,9 +252,16 @@ public class QueueService {
 
         queue.setStatus(QueueStatus.PAUSED);
 
-        return QueueResponse.from(
-                queueRepository.save(queue)
+        Queue savedQueue = queueRepository.save(queue);
+
+        log.info(
+            "queue.paused queueId={} previousStatus={} newStatus={}",
+            queueId,
+            QueueStatus.ACTIVE,
+            savedQueue.getStatus()
         );
+
+        return QueueResponse.from(savedQueue);
     }
 
     @Transactional
@@ -254,9 +280,16 @@ public class QueueService {
 
         queue.setStatus(QueueStatus.ACTIVE);
 
-        return QueueResponse.from(
-                queueRepository.save(queue)
+        Queue savedQueue = queueRepository.save(queue);
+
+        log.info(
+            "queue.resumed queueId={} previousStatus={} newStatus={}",
+            queueId,
+            QueueStatus.PAUSED,
+            savedQueue.getStatus()
         );
+
+        return QueueResponse.from(savedQueue);
     }
 
     @Transactional
@@ -273,11 +306,20 @@ public class QueueService {
             );
         }
 
+        QueueStatus previousStatus = queue.getStatus();
+
         queue.setStatus(QueueStatus.CLOSED);
 
-        return QueueResponse.from(
-                queueRepository.save(queue)
+        Queue savedQueue = queueRepository.save(queue);
+
+        log.info(
+            "queue.closed queueId={} previousStatus={} newStatus={}",
+            queueId,
+            previousStatus,
+            savedQueue.getStatus()
         );
+
+        return QueueResponse.from(savedQueue);
     }
 
     private Queue getQueueEntity(Long queueId) {
