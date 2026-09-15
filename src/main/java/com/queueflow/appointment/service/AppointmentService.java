@@ -20,11 +20,15 @@ import com.queueflow.queue.QueueStatus;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AppointmentService {
+    private static final Logger log =
+        LoggerFactory.getLogger(AppointmentService.class);
 
     private final AppointmentRepository appointmentRepository;
     private final QueueRepository queueRepository;
@@ -88,11 +92,19 @@ public AppointmentResponse createAppointment(
 
     try {
         Appointment createdAppointment =
-                appointmentCreationTransactionService.createAppointment(
-                        request,
-                        idempotencyKey,
-                        requestFingerprint
-                );
+        appointmentCreationTransactionService.createAppointment(
+                request,
+                idempotencyKey,
+                requestFingerprint
+        );
+
+        log.info(
+            "appointment.created appointmentId={} customerId={} queueId={} tokenNumber={}",
+            createdAppointment.getId(),
+            request.getCustomerId(),
+            request.getQueueId(),
+            createdAppointment.getTokenNumber()
+        );
 
         return AppointmentResponse.from(createdAppointment);
 
@@ -171,6 +183,13 @@ public AppointmentResponse callAppointment(Long appointmentId) {
     appointmentRepository.save(lockedAppointment);
     queueRepository.save(queue);
 
+    log.info(
+        "appointment.called appointmentId={} queueId={} tokenNumber={}",
+        lockedAppointment.getId(),
+        queueId,
+        lockedAppointment.getTokenNumber()
+    );
+
     return AppointmentResponse.from(lockedAppointment);
 }
 
@@ -193,9 +212,16 @@ public AppointmentResponse callAppointment(Long appointmentId) {
 
         appointment.setStatus(AppointmentStatus.IN_SERVICE);
 
-        return AppointmentResponse.from(
-                appointmentRepository.save(appointment)
+        Appointment savedAppointment =
+            appointmentRepository.save(appointment);
+
+        log.info(
+            "appointment.started appointmentId={} tokenNumber={}",
+            savedAppointment.getId(),
+            savedAppointment.getTokenNumber()
         );
+
+        return AppointmentResponse.from(savedAppointment);
     }
 
     @Transactional
@@ -216,9 +242,16 @@ public AppointmentResponse completeAppointment(Long appointmentId) {
 
     appointment.setStatus(AppointmentStatus.COMPLETED);
 
-    return AppointmentResponse.from(
-            appointmentRepository.save(appointment)
+    Appointment savedAppointment =
+        appointmentRepository.save(appointment);
+
+    log.info(
+        "appointment.completed appointmentId={} tokenNumber={}",
+        savedAppointment.getId(),
+        savedAppointment.getTokenNumber()
     );
+
+    return AppointmentResponse.from(savedAppointment);
 }
 
 @Transactional
@@ -242,9 +275,17 @@ public AppointmentResponse cancelAppointment(Long appointmentId) {
 
     appointment.setStatus(AppointmentStatus.CANCELLED);
 
-    return AppointmentResponse.from(
-            appointmentRepository.save(appointment)
+    Appointment savedAppointment =
+        appointmentRepository.save(appointment);
+
+    log.info(
+        "appointment.cancelled appointmentId={} previousStatus={} newStatus={}",
+        savedAppointment.getId(),
+        currentStatus,
+        savedAppointment.getStatus()
     );
+
+    return AppointmentResponse.from(savedAppointment);
 }
 
 @Transactional
@@ -264,11 +305,21 @@ public AppointmentResponse markNoShow(Long appointmentId) {
         );
     }
 
+    AppointmentStatus previousStatus = appointment.getStatus();
+
     appointment.setStatus(AppointmentStatus.NO_SHOW);
 
-    return AppointmentResponse.from(
-            appointmentRepository.save(appointment)
+    Appointment savedAppointment =
+        appointmentRepository.save(appointment);
+
+    log.info(
+        "appointment.no_show appointmentId={} previousStatus={} newStatus={}",
+        savedAppointment.getId(),
+        previousStatus,
+        savedAppointment.getStatus()
     );
+
+    return AppointmentResponse.from(savedAppointment);
 }
 
 @Transactional(readOnly = true)
