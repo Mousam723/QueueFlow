@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -104,6 +105,24 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+public ResponseEntity<ApiErrorResponse> handleAccessDenied(
+        AccessDeniedException exception,
+        HttpServletRequest request) {
+
+    log.warn(
+            "request.failed status=403 error=FORBIDDEN method={} uri={}",
+            request.getMethod(),
+            request.getRequestURI()
+    );
+
+    return buildResponse(
+            HttpStatus.FORBIDDEN,
+            "FORBIDDEN",
+            "You do not have permission to access this resource",
+            request
+    );
+}
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpectedException(
