@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -21,6 +22,7 @@ public class ServiceController {
         this.serviceService = serviceService;
     }
 
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ServiceResponse createService(
@@ -30,6 +32,7 @@ public class ServiceController {
         return serviceService.createService(businessId, request);
     }
 
+    @PreAuthorize("@authorizationService.canAccessBusiness(#businessId)")
     @GetMapping
     public List<ServiceResponse> getServices(
             @PathVariable Long businessId) {

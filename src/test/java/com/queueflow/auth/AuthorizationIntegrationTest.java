@@ -9,6 +9,7 @@ import com.queueflow.businessstaff.BusinessStaffRepository;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
+import com.queueflow.service.dto.CreateServiceRequest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -564,7 +565,172 @@ class AuthorizationIntegrationTest {
                 )
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    void shouldAllowBusinessOwnerToCreateService() throws Exception {
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("Owner Service");
+        request.setDescription("Created by business owner");
+        request.setDurationMinutes(30);
     
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + ownerToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldAllowAdminToCreateServiceForAnyBusiness() throws Exception {
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("Admin Service");
+        request.setDescription("Created by admin");
+        request.setDurationMinutes(30);
+    
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/services",
+                                anotherOwnerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + adminToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldRejectAnotherBusinessOwnerFromCreatingService() throws Exception {
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("Unauthorized Service");
+        request.setDescription("Should not be created");
+        request.setDurationMinutes(30);
+    
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + anotherOwnerToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectAssignedStaffFromCreatingService() throws Exception {
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("Staff Service");
+        request.setDescription("Should not be created");
+        request.setDurationMinutes(30);
+    
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + staffToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectUnassignedStaffFromCreatingService() throws Exception {
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("Unassigned Staff Service");
+        request.setDescription("Should not be created");
+        request.setDurationMinutes(30);
+    
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + unassignedStaffToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldAllowBusinessOwnerToListServices() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + ownerToken
+                                )
+                )
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void shouldAllowAdminToListServicesForAnyBusiness() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/services",
+                                anotherOwnerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + adminToken
+                                )
+                )
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void shouldAllowAssignedStaffToListServices() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + staffToken
+                                )
+                )
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void shouldRejectUnassignedStaffFromListingServices() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + unassignedStaffToken
+                                )
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectAnotherBusinessOwnerFromListingServices() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/services",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + anotherOwnerToken
+                                )
+                )
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void shouldRejectInvalidJwt()
             throws Exception {
