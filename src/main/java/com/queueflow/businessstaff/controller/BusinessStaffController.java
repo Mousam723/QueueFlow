@@ -3,6 +3,7 @@ package com.queueflow.businessstaff.controller;
 import com.queueflow.businessstaff.dto.AssignStaffRequest;
 import com.queueflow.businessstaff.dto.StaffResponse;
 import com.queueflow.businessstaff.service.BusinessStaffService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,7 @@ public class BusinessStaffController {
         this.businessStaffService = businessStaffService;
     }
 
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public StaffResponse assignStaff(
@@ -30,6 +32,7 @@ public class BusinessStaffController {
         return businessStaffService.assignStaff(businessId, request);
     }
 
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
     public List<StaffResponse> getBusinessStaff(

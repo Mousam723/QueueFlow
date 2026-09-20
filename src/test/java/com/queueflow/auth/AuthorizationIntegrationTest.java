@@ -302,7 +302,7 @@ class AuthorizationIntegrationTest {
         )
                 .andExpect(status().isForbidden());
     }
-    
+
     @Test
     void shouldAllowBusinessOwnerToAccessOwnBusiness()
             throws Exception {
@@ -437,6 +437,134 @@ class AuthorizationIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void shouldAllowBusinessOwnerToAssignStaff() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + ownerToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "staffId": %d
+                                        }
+                                        """.formatted(unassignedStaff.getId()))
+                )
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldAllowAdminToAssignStaffToAnyBusiness() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + adminToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "staffId": %d
+                                        }
+                                        """.formatted(unassignedStaff.getId()))
+                )
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldRejectAnotherBusinessOwnerFromAssigningStaff() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + anotherOwnerToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "staffId": %d
+                                        }
+                                        """.formatted(unassignedStaff.getId()))
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectStaffFromAssigningStaff() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + staffToken
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "staffId": %d
+                                        }
+                                        """.formatted(unassignedStaff.getId()))
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldAllowBusinessOwnerToListBusinessStaff() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + ownerToken
+                                )
+                )
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void shouldAllowAdminToListAnyBusinessStaff() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + adminToken
+                                )
+                )
+                .andExpect(status().isOk());
+    }
+    
+    @Test
+    void shouldRejectAnotherBusinessOwnerFromListingStaff() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + anotherOwnerToken
+                                )
+                )
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectStaffFromListingBusinessStaff() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/businesses/{businessId}/staff",
+                                ownerBusiness.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + staffToken
+                                )
+                )
+                .andExpect(status().isForbidden());
+    }
+    
     @Test
     void shouldRejectInvalidJwt()
             throws Exception {
