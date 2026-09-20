@@ -144,6 +144,93 @@ class AuthorizationIntegrationTest {
             unassignedStaff.getRole().name()
     );
     }
+    @Test
+    void shouldAllowBusinessOwnerToCreateOwnBusiness() throws Exception {
+        CreateBusinessRequest request = new CreateBusinessRequest();
+        request.setOwnerId(owner.getId());
+        request.setName("New Owner Business");
+        request.setDescription("Created by owner");
+        request.setAddress("Test Address");
+        request.setTimezone("Asia/Kolkata");
+    
+        mockMvc.perform(
+                post("/api/v1/businesses")
+                        .header(
+                                "Authorization",
+                                "Bearer " + ownerToken
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void shouldRejectBusinessOwnerFromCreatingBusinessForAnotherOwner()
+            throws Exception {
+    
+        CreateBusinessRequest request = new CreateBusinessRequest();
+        request.setOwnerId(anotherOwner.getId());
+        request.setName("Unauthorized Business");
+        request.setDescription("Should not be created");
+        request.setAddress("Test Address");
+        request.setTimezone("Asia/Kolkata");
+    
+        mockMvc.perform(
+                post("/api/v1/businesses")
+                        .header(
+                                "Authorization",
+                                "Bearer " + ownerToken
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectStaffFromCreatingBusiness() throws Exception {
+        CreateBusinessRequest request = new CreateBusinessRequest();
+        request.setOwnerId(staff.getId());
+        request.setName("Staff Business");
+        request.setDescription("Should not be created");
+        request.setAddress("Test Address");
+        request.setTimezone("Asia/Kolkata");
+    
+        mockMvc.perform(
+                post("/api/v1/businesses")
+                        .header(
+                                "Authorization",
+                                "Bearer " + staffToken
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowAdminToCreateBusinessForAnotherOwner()
+            throws Exception {
+    
+        CreateBusinessRequest request = new CreateBusinessRequest();
+        request.setOwnerId(anotherOwner.getId());
+        request.setName("Admin Created Business");
+        request.setDescription("Created by admin");
+        request.setAddress("Test Address");
+        request.setTimezone("Asia/Kolkata");
+    
+        mockMvc.perform(
+                post("/api/v1/businesses")
+                        .header(
+                                "Authorization",
+                                "Bearer " + adminToken
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isCreated());
+    }
 
     @Test
     void shouldReturn401WhenAccessingBusinessWithoutAuthentication()
@@ -156,6 +243,66 @@ class AuthorizationIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void shouldAllowBusinessOwnerToListOwnBusinesses()
+            throws Exception {
+    
+        mockMvc.perform(
+                get("/api/v1/businesses")
+                        .param("ownerId", owner.getId().toString())
+                        .header(
+                                "Authorization",
+                                "Bearer " + ownerToken
+                        )
+        )
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldRejectBusinessOwnerFromListingAnotherOwnersBusinesses()
+            throws Exception {
+    
+        mockMvc.perform(
+                get("/api/v1/businesses")
+                        .param("ownerId", anotherOwner.getId().toString())
+                        .header(
+                                "Authorization",
+                                "Bearer " + ownerToken
+                        )
+        )
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowAdminToListAnotherOwnersBusinesses()
+            throws Exception {
+    
+        mockMvc.perform(
+                get("/api/v1/businesses")
+                        .param("ownerId", anotherOwner.getId().toString())
+                        .header(
+                                "Authorization",
+                                "Bearer " + adminToken
+                        )
+        )
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldRejectStaffFromListingBusinesses()
+            throws Exception {
+    
+        mockMvc.perform(
+                get("/api/v1/businesses")
+                        .param("ownerId", owner.getId().toString())
+                        .header(
+                                "Authorization",
+                                "Bearer " + staffToken
+                        )
+        )
+                .andExpect(status().isForbidden());
+    }
+    
     @Test
     void shouldAllowBusinessOwnerToAccessOwnBusiness()
             throws Exception {

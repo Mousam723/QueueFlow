@@ -20,6 +20,7 @@ public class BusinessController {
         this.businessService = businessService;
     }
 
+    @PreAuthorize("@authorizationService.canCreateBusiness(#request.ownerId)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public BusinessResponse createBusiness(
@@ -37,6 +38,7 @@ public class BusinessController {
         return businessService.getBusiness(businessId);
     }
 
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwnerId(#ownerId)")
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
     public List<BusinessResponse> getBusinessesByOwner(

@@ -82,6 +82,33 @@ public class AuthorizationService {
                 .orElse(false);
     }
 
+    public boolean isBusinessOwnerId(Long ownerId) {
+        if (!securityEnabled) {
+            return true;
+        }
+    
+        Long userId = getAuthenticatedUserId();
+    
+        if (userId == null || ownerId == null) {
+            return false;
+        }
+    
+        return userId.equals(ownerId);
+    }
+    
+    public boolean canCreateBusiness(Long ownerId) {
+        if (!securityEnabled) {
+            return true;
+        }
+    
+        if (isAdmin()) {
+            return true;
+        }
+    
+        return hasRole(UserRole.BUSINESS_OWNER)
+                && isBusinessOwnerId(ownerId);
+    }
+
     public boolean isStaffAssignedToBusiness(Long businessId) {
         if (!securityEnabled) {
             return true;
