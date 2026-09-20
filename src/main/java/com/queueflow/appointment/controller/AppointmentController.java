@@ -7,6 +7,7 @@ import com.queueflow.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 
 @RestController
@@ -21,6 +22,7 @@ public class AppointmentController {
 
     @PostMapping
 @ResponseStatus(HttpStatus.CREATED)
+@PreAuthorize("@authorizationService.canCreateAppointment(#request.customerId, #request.queueId)")
 public AppointmentResponse createAppointment(
         @RequestHeader("Idempotency-Key") String idempotencyKey,
         @Valid @RequestBody CreateAppointmentRequest request
@@ -30,6 +32,7 @@ public AppointmentResponse createAppointment(
 
     @PostMapping("/{appointmentId}/call")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("@authorizationService.canManageAppointment(#appointmentId)")
     public AppointmentResponse callAppointment(
             @PathVariable Long appointmentId
     ) {
@@ -39,6 +42,7 @@ public AppointmentResponse createAppointment(
 
     @PostMapping("/{appointmentId}/start")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("@authorizationService.canManageAppointment(#appointmentId)")
     public AppointmentResponse startAppointment(
             @PathVariable Long appointmentId
     ) {
@@ -47,6 +51,7 @@ public AppointmentResponse createAppointment(
 
     @PostMapping("/{appointmentId}/complete")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canManageAppointment(#appointmentId)")
 public AppointmentResponse completeAppointment(
         @PathVariable Long appointmentId
 ) {
@@ -55,6 +60,7 @@ public AppointmentResponse completeAppointment(
 
 @PostMapping("/{appointmentId}/cancel")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canAccessAppointment(#appointmentId)")
 public AppointmentResponse cancelAppointment(
         @PathVariable Long appointmentId
 ) {
@@ -63,6 +69,7 @@ public AppointmentResponse cancelAppointment(
 
 @PostMapping("/{appointmentId}/no-show")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canManageAppointment(#appointmentId)")
 public AppointmentResponse markNoShow(
         @PathVariable Long appointmentId
 ) {
@@ -71,6 +78,7 @@ public AppointmentResponse markNoShow(
 
 @GetMapping("/{appointmentId}/position")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canAccessAppointment(#appointmentId)")
 public QueuePositionResponse getQueuePosition(
         @PathVariable Long appointmentId
 ) {
@@ -79,6 +87,7 @@ public QueuePositionResponse getQueuePosition(
 
 @GetMapping("/{appointmentId}")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canAccessAppointment(#appointmentId)")
 public AppointmentResponse getAppointment(
         @PathVariable Long appointmentId
 ) {
@@ -87,6 +96,7 @@ public AppointmentResponse getAppointment(
 
 @GetMapping("/customers/{customerId}")
 @ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canAccessCustomerAppointments(#customerId)")
 public List<AppointmentResponse> getCustomerAppointments(
         @PathVariable Long customerId
 ) {
