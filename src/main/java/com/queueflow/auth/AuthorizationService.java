@@ -7,6 +7,9 @@ import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
+import com.queueflow.queue.Queue;
+import com.queueflow.queue.QueueRepository;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,15 +24,18 @@ public class AuthorizationService {
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
     private final BusinessStaffRepository businessStaffRepository;
+    private final QueueRepository queueRepository;
 
     public AuthorizationService(
             UserRepository userRepository,
             BusinessRepository businessRepository,
-            BusinessStaffRepository businessStaffRepository
+            BusinessStaffRepository businessStaffRepository,
+            QueueRepository queueRepository
     ) {
         this.userRepository = userRepository;
         this.businessRepository = businessRepository;
         this.businessStaffRepository = businessStaffRepository;
+        this.queueRepository = queueRepository;
     }
 
     public Long getAuthenticatedUserId() {
@@ -154,5 +160,19 @@ public class AuthorizationService {
                         authority.getAuthority()
                                 .equals("ROLE_" + role.name())
                 );
+    }
+
+    public boolean canAccessQueue(Long queueId) {
+        if (!securityEnabled) {
+            return true;
+        }
+    
+        Queue queue = queueRepository.findById(queueId).orElse(null);
+    
+        if (queue == null) {
+            return false;
+        }
+    
+        return canAccessBusiness(queue.getBusiness().getId());
     }
 }

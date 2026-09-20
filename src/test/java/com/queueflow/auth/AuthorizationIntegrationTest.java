@@ -10,6 +10,12 @@ import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
 import com.queueflow.service.dto.CreateServiceRequest;
+import com.queueflow.queue.Queue;
+import com.queueflow.queue.QueueRepository;
+import com.queueflow.queue.dto.CreateQueueRequest;
+import com.queueflow.service.Service;
+import com.queueflow.service.ServiceRepository;
+import com.queueflow.service.ServiceStatus;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +57,12 @@ class AuthorizationIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private QueueRepository queueRepository;
+
+    @Autowired
+    private ServiceRepository serviceRepository;
 
     private User admin;
     private User owner;
@@ -732,6 +744,66 @@ class AuthorizationIntegrationTest {
     }
 
     @Test
+    void shouldAllowBusinessOwnerToCreateQueue() throws Exception {
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(createService(ownerBusiness).getId());
+    
+        mockMvc.perform(post("/api/v1/businesses/" + ownerBusiness.getId() + "/queues")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldAllowAdminToCreateQueueForAnyBusiness() throws Exception {
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(createService(anotherOwnerBusiness).getId());
+    
+        mockMvc.perform(post("/api/v1/businesses/" + anotherOwnerBusiness.getId() + "/queues")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+    
+    @Test
+    void shouldRejectAnotherBusinessOwnerFromCreatingQueue() throws Exception {
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(createService(ownerBusiness).getId());
+    
+        mockMvc.perform(post("/api/v1/businesses/" + ownerBusiness.getId() + "/queues")
+                        .header("Authorization", "Bearer " + anotherOwnerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectAssignedStaffFromCreatingQueue() throws Exception {
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(createService(ownerBusiness).getId());
+    
+        mockMvc.perform(post("/api/v1/businesses/" + ownerBusiness.getId() + "/queues")
+                        .header("Authorization", "Bearer " + staffToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+    
+    @Test
+    void shouldRejectUnassignedStaffFromCreatingQueue() throws Exception {
+        CreateQueueRequest request = new CreateQueueRequest();
+        request.setServiceId(createService(ownerBusiness).getId());
+    
+        mockMvc.perform(post("/api/v1/businesses/" + ownerBusiness.getId() + "/queues")
+                        .header("Authorization", "Bearer " + unassignedStaffToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void shouldRejectInvalidJwt()
             throws Exception {
 
@@ -776,6 +848,16 @@ class AuthorizationIntegrationTest {
         return businessRepository.save(business);
     }
 
+    private Service createService(Business business) {
+        Service service = new Service();
+        service.setBusiness(business);
+        service.setName("Authorization Test Service");
+        service.setDescription("Authorization test service");
+        service.setDurationMinutes(30);
+        service.setStatus(ServiceStatus.ACTIVE);
+        return serviceRepository.save(service);
+    }
+    
     private String bearerToken(User user) {
         return "Bearer " + jwtService.generateToken(
                 user.getId(),

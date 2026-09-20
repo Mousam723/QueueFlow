@@ -3,7 +3,7 @@ package com.queueflow.queue.controller;
 import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.queue.service.QueueService;
-
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +21,7 @@ public class QueueController {
         this.queueService = queueService;
     }
 
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
     @PostMapping("/businesses/{businessId}/queues")
     @ResponseStatus(HttpStatus.CREATED)
     public QueueResponse createQueue(
@@ -30,6 +31,7 @@ public class QueueController {
         return queueService.createQueue(businessId, request);
     }
 
+    @PreAuthorize("@authorizationService.canAccessBusiness(#businessId)")
     @GetMapping("/businesses/{businessId}/queues")
     public List<QueueResponse> getBusinessQueues(
             @PathVariable Long businessId,
@@ -40,6 +42,7 @@ public class QueueController {
         return queueService.getBusinessQueues(businessId, date);
     }
 
+    @PreAuthorize("@authorizationService.canAccessQueue(#queueId)")
     @GetMapping("/queues/{queueId}")
     public QueueResponse getQueue(
             @PathVariable Long queueId) {
