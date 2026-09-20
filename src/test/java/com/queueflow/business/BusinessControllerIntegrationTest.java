@@ -166,13 +166,13 @@ void shouldReturn404WhenBusinessDoesNotExist() throws Exception {
 
 @Test
 void shouldGetBusinessesByOwnerSuccessfully() throws Exception {
+
     User owner = new User();
     owner.setName("List Business Owner");
     owner.setEmail("list-business-owner@test.com");
     owner.setPhone("9999999998");
     owner.setPasswordHash("test-password");
     owner.setRole(UserRole.BUSINESS_OWNER);
-
     User savedOwner = userRepository.save(owner);
 
     CreateBusinessRequest firstRequest = new CreateBusinessRequest();
@@ -204,30 +204,106 @@ void shouldGetBusinessesByOwnerSuccessfully() throws Exception {
     mockMvc.perform(
             get("/api/v1/businesses")
                     .param("ownerId", savedOwner.getId().toString())
+                    .param("page", "0")
+                    .param("size", "10")
     )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(2))
-            .andExpect(jsonPath("$[0].name").value("Clinic One"))
-            .andExpect(jsonPath("$[1].name").value("Clinic Two"));
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[0].name").value("Clinic One"))
+            .andExpect(jsonPath("$.content[1].name").value("Clinic Two"))
+            .andExpect(jsonPath("$.totalElements").value(2))
+            .andExpect(jsonPath("$.totalPages").value(1))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(10))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
 }
 
 @Test
-void shouldReturnEmptyListWhenOwnerHasNoBusinesses() throws Exception {
+void shouldPaginateBusinessesByOwner() throws Exception {
+
+    User owner = new User();
+    owner.setName("Pagination Owner");
+    owner.setEmail("pagination-owner@test.com");
+    owner.setPhone("9999999995");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+    User savedOwner = userRepository.save(owner);
+
+    for (int i = 1; i <= 3; i++) {
+        CreateBusinessRequest request = new CreateBusinessRequest();
+        request.setOwnerId(savedOwner.getId());
+        request.setName("Clinic " + i);
+        request.setDescription("Clinic " + i + " description");
+        request.setAddress("Hyderabad");
+        request.setTimezone("Asia/Kolkata");
+
+        mockMvc.perform(
+                post("/api/v1/businesses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        ).andExpect(status().isCreated());
+    }
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+                    .param("page", "0")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[0].name").value("Clinic 1"))
+            .andExpect(jsonPath("$.content[1].name").value("Clinic 2"))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(false));
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+                    .param("page", "1")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("Clinic 3"))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(1))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(false))
+            .andExpect(jsonPath("$.last").value(true));
+}
+
+@Test
+void shouldReturnEmptyPageWhenOwnerHasNoBusinesses() throws Exception {
+
     User owner = new User();
     owner.setName("Empty Business Owner");
     owner.setEmail("empty-business-owner@test.com");
     owner.setPhone("9999999997");
     owner.setPasswordHash("test-password");
     owner.setRole(UserRole.BUSINESS_OWNER);
-
     User savedOwner = userRepository.save(owner);
 
     mockMvc.perform(
             get("/api/v1/businesses")
                     .param("ownerId", savedOwner.getId().toString())
+                    .param("page", "0")
+                    .param("size", "10")
     )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(0));
+            .andExpect(jsonPath("$.content.length()").value(0))
+            .andExpect(jsonPath("$.totalElements").value(0))
+            .andExpect(jsonPath("$.totalPages").value(0))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(10))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
 }
 
 @Test

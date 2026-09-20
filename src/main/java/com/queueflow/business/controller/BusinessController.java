@@ -7,8 +7,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/businesses")
@@ -41,10 +42,11 @@ public class BusinessController {
     @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwnerId(#ownerId)")
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    public List<BusinessResponse> getBusinessesByOwner(
-            @RequestParam Long ownerId
+    public Page<BusinessResponse> getBusinessesByOwner(
+            @RequestParam Long ownerId,
+            Pageable pageable
     ) {
-        return businessService.getBusinessesByOwner(ownerId);
+        return businessService.getBusinessesByOwner(ownerId, pageable);
     }
 
     @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
