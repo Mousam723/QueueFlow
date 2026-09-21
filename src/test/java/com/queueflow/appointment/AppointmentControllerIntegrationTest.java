@@ -2152,15 +2152,110 @@ void shouldGetCustomerAppointments() throws Exception {
             )
     )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$.content.length()").value(2))
             .andExpect(
-                    jsonPath("$[0].customerId")
+                    jsonPath("$.content[0].customerId")
                             .value(customer.getId())
             )
             .andExpect(
-                    jsonPath("$[1].customerId")
+                    jsonPath("$.content[1].customerId")
                             .value(customer.getId())
-            );
+            )
+            .andExpect(jsonPath("$.totalElements").value(2))
+            .andExpect(jsonPath("$.totalPages").value(1))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
+}
+
+@Test
+void shouldReturnEmptyPageWhenCustomerHasNoAppointments()
+        throws Exception {
+
+    User customer = createCustomer(
+            "appointment-history-empty@test.com"
+    );
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    customer.getId()
+            )
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(0))
+            .andExpect(jsonPath("$.totalElements").value(0))
+            .andExpect(jsonPath("$.totalPages").value(0))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
+}
+
+@Test
+void shouldPaginateCustomerAppointments()
+        throws Exception {
+
+    Business business = createBusiness(
+            "appointment-pagination-business@test.com"
+    );
+
+    Service service = createService(business);
+
+    Queue queue = createQueue(
+            business,
+            service,
+            LocalDate.of(2026, 8, 31)
+    );
+
+    User customer = createCustomer(
+            "appointment-pagination-customer@test.com"
+    );
+
+    for (int i = 0; i < 3; i++) {
+        mockMvc.perform(
+                createAppointmentPost(
+                        customer.getId(),
+                        queue.getId()
+                )
+        )
+                .andExpect(status().isCreated());
+    }
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    customer.getId()
+            )
+                    .param("page", "0")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(false));
+
+    mockMvc.perform(
+            get(
+                    "/api/v1/appointments/customers/{customerId}",
+                    customer.getId()
+            )
+                    .param("page", "1")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(1))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(false))
+            .andExpect(jsonPath("$.last").value(true));
 }
 
 @Test

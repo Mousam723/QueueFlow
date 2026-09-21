@@ -6,6 +6,8 @@ import com.queueflow.appointment.dto.QueuePositionResponse;
 import com.queueflow.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
@@ -97,10 +99,14 @@ public AppointmentResponse getAppointment(
 @GetMapping("/customers/{customerId}")
 @ResponseStatus(HttpStatus.OK)
 @PreAuthorize("@authorizationService.canAccessCustomerAppointments(#customerId)")
-public List<AppointmentResponse> getCustomerAppointments(
-        @PathVariable Long customerId
+public Page<AppointmentResponse> getCustomerAppointments(
+        @PathVariable Long customerId,
+        Pageable pageable
 ) {
-    return appointmentService.getCustomerAppointments(customerId);
+    return appointmentService.getCustomerAppointments(
+            customerId,
+            pageable
+    );
 }
 
 }

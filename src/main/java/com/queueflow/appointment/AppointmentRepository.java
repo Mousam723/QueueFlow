@@ -1,6 +1,8 @@
 package com.queueflow.appointment;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,7 +17,10 @@ public interface AppointmentRepository
     Optional<Appointment> findByIdempotencyKey(String idempotencyKey);
     List<Appointment> findByQueueIdOrderByTokenNumberAsc(Long queueId);
 
-    List<Appointment> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
+    Page<Appointment> findByCustomerIdOrderByCreatedAtDescIdDesc(
+            Long customerId,
+            Pageable pageable
+    );
 
     List<Appointment> findByQueueIdAndStatusOrderByTokenNumberAsc(
             Long queueId,
