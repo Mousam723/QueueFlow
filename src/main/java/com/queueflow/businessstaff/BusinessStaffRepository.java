@@ -1,8 +1,8 @@
 package com.queueflow.businessstaff;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.util.List;
 
 public interface BusinessStaffRepository
         extends JpaRepository<BusinessStaff, Long> {
@@ -12,7 +12,8 @@ public interface BusinessStaffRepository
             Long staffId
     );
 
-    List<BusinessStaff> findByBusinessIdOrderByCreatedAtAsc(
-            Long businessId
+    Page<BusinessStaff> findByBusinessIdOrderByCreatedAtAsc(
+            Long businessId,
+            Pageable pageable
     );
 }

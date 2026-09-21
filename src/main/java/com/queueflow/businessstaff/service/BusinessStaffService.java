@@ -12,10 +12,10 @@ import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class BusinessStaffService {
@@ -79,7 +79,10 @@ public class BusinessStaffService {
     }
 
     @Transactional(readOnly = true)
-    public List<StaffResponse> getBusinessStaff(Long businessId) {
+    public Page<StaffResponse> getBusinessStaff(
+            Long businessId,
+            Pageable pageable
+    ) {
         if (!businessRepository.existsById(businessId)) {
             throw new ResourceNotFoundException(
                     "Business with id " + businessId + " was not found"
@@ -87,9 +90,10 @@ public class BusinessStaffService {
         }
 
         return businessStaffRepository
-                .findByBusinessIdOrderByCreatedAtAsc(businessId)
-                .stream()
-                .map(StaffResponse::from)
-                .toList();
+                .findByBusinessIdOrderByCreatedAtAsc(
+                        businessId,
+                        pageable
+                )
+                .map(StaffResponse::from);
     }
 }

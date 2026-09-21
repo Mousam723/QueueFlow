@@ -624,9 +624,15 @@ void shouldListBusinessStaffSuccessfully() throws Exception {
             get("/api/v1/businesses/{businessId}/staff", businessId)
     )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(2))
-            .andExpect(jsonPath("$[0].name").value("First Staff"))
-            .andExpect(jsonPath("$[1].name").value("Second Staff"));
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[0].name").value("First Staff"))
+            .andExpect(jsonPath("$.content[1].name").value("Second Staff"))
+            .andExpect(jsonPath("$.totalElements").value(2))
+            .andExpect(jsonPath("$.totalPages").value(1))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
 }
 
 @Test
@@ -646,7 +652,78 @@ void shouldReturnEmptyListWhenBusinessHasNoStaff() throws Exception {
             get("/api/v1/businesses/{businessId}/staff", businessId)
     )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(0));
+            .andExpect(jsonPath("$.content.length()").value(0))
+            .andExpect(jsonPath("$.totalElements").value(0))
+            .andExpect(jsonPath("$.totalPages").value(0))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(true));
+}
+
+@Test
+void shouldPaginateBusinessStaff() throws Exception {
+
+    User owner = createUser(
+            "Pagination Staff Owner",
+            "pagination-staff-owner@test.com",
+            UserRole.BUSINESS_OWNER
+    );
+
+    Long businessId = createBusiness(
+            owner.getId(),
+            "Pagination Staff Business"
+    );
+
+    User firstStaff = createUser(
+            "Pagination Staff One",
+            "pagination-staff-one@test.com",
+            UserRole.STAFF
+    );
+
+    User secondStaff = createUser(
+            "Pagination Staff Two",
+            "pagination-staff-two@test.com",
+            UserRole.STAFF
+    );
+
+    User thirdStaff = createUser(
+            "Pagination Staff Three",
+            "pagination-staff-three@test.com",
+            UserRole.STAFF
+    );
+
+    assignStaff(businessId, firstStaff.getId());
+    assignStaff(businessId, secondStaff.getId());
+    assignStaff(businessId, thirdStaff.getId());
+
+    mockMvc.perform(
+            get("/api/v1/businesses/{businessId}/staff", businessId)
+                    .param("page", "0")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(false));
+
+    mockMvc.perform(
+            get("/api/v1/businesses/{businessId}/staff", businessId)
+                    .param("page", "1")
+                    .param("size", "2")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.totalElements").value(3))
+            .andExpect(jsonPath("$.totalPages").value(2))
+            .andExpect(jsonPath("$.number").value(1))
+            .andExpect(jsonPath("$.size").value(2))
+            .andExpect(jsonPath("$.first").value(false))
+            .andExpect(jsonPath("$.last").value(true));
 }
 
 @Test
