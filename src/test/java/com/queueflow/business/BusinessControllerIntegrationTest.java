@@ -662,6 +662,78 @@ void shouldReturnEmptyListWhenBusinessHasNoStaff() throws Exception {
 }
 
 @Test
+void shouldUseDefaultPaginationWhenPageAndSizeAreNotProvided() throws Exception {
+
+    User owner = new User();
+    owner.setName("Default Pagination Owner");
+    owner.setEmail("default-pagination-owner@test.com");
+    owner.setPhone("9999999996");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest request = new CreateBusinessRequest();
+    request.setOwnerId(savedOwner.getId());
+    request.setName("Default Pagination Business");
+    request.setDescription("Default pagination test");
+    request.setAddress("Hyderabad");
+    request.setTimezone("Asia/Kolkata");
+
+    mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.first").value(true));
+}
+
+@Test
+void shouldCapPaginationSizeAtMaximum() throws Exception {
+
+    User owner = new User();
+    owner.setName("Maximum Pagination Owner");
+    owner.setEmail("maximum-pagination-owner@test.com");
+    owner.setPhone("9999999997");
+    owner.setPasswordHash("test-password");
+    owner.setRole(UserRole.BUSINESS_OWNER);
+    User savedOwner = userRepository.save(owner);
+
+    CreateBusinessRequest request = new CreateBusinessRequest();
+    request.setOwnerId(savedOwner.getId());
+    request.setName("Maximum Pagination Business");
+    request.setDescription("Maximum pagination test");
+    request.setAddress("Hyderabad");
+    request.setTimezone("Asia/Kolkata");
+
+    mockMvc.perform(
+            post("/api/v1/businesses")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+    )
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(
+            get("/api/v1/businesses")
+                    .param("ownerId", savedOwner.getId().toString())
+                    .param("page", "0")
+                    .param("size", "101")
+    )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.number").value(0))
+            .andExpect(jsonPath("$.size").value(100))
+            .andExpect(jsonPath("$.first").value(true));
+}
+
+@Test
 void shouldPaginateBusinessStaff() throws Exception {
 
     User owner = createUser(
