@@ -7,10 +7,11 @@ import com.queueflow.service.service.ServiceService;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/businesses/{businessId}/services")
@@ -34,9 +35,10 @@ public class ServiceController {
 
     @PreAuthorize("@authorizationService.canAccessBusiness(#businessId)")
     @GetMapping
-    public List<ServiceResponse> getServices(
-            @PathVariable Long businessId) {
+    public Page<ServiceResponse> getServices(
+            @PathVariable Long businessId,
+            Pageable pageable) {
 
-        return serviceService.getServicesByBusiness(businessId);
+        return serviceService.getServicesByBusiness(businessId, pageable);
     }
 }

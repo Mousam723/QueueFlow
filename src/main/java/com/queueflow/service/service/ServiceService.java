@@ -9,6 +9,8 @@ import com.queueflow.service.dto.CreateServiceRequest;
 import com.queueflow.service.dto.ServiceResponse;
 
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -52,16 +54,18 @@ public class ServiceService {
     }
 
     @Transactional(readOnly = true)
-    public List<ServiceResponse> getServicesByBusiness(Long businessId) {
+    public Page<ServiceResponse> getServicesByBusiness(
+            Long businessId,
+            Pageable pageable
+    ) {
 
         if (!businessRepository.existsById(businessId)) {
             throw new ResourceNotFoundException(
                     "Business with id " + businessId + " was not found");
         }
 
-        return serviceRepository.findByBusinessId(businessId)
-                .stream()
-                .map(ServiceResponse::from)
-                .toList();
+        return serviceRepository
+                .findByBusinessIdOrderByIdAsc(businessId, pageable)
+                .map(ServiceResponse::from);
     }
 }

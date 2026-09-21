@@ -125,40 +125,114 @@ class ServiceControllerIntegrationTest {
 
     @Test
     void shouldGetServicesForBusiness() throws Exception {
-
         Business business = createTestBusiness();
-
+    
         CreateServiceRequest firstRequest = new CreateServiceRequest();
         firstRequest.setName("General Consultation");
         firstRequest.setDescription("General consultation");
         firstRequest.setDurationMinutes(30);
-
+    
         mockMvc.perform(
                 post("/api/v1/businesses/{businessId}/services", business.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(firstRequest))
         )
         .andExpect(status().isCreated());
-
+    
         CreateServiceRequest secondRequest = new CreateServiceRequest();
         secondRequest.setName("Follow-up Consultation");
         secondRequest.setDescription("Follow-up consultation");
         secondRequest.setDurationMinutes(15);
-
+    
         mockMvc.perform(
                 post("/api/v1/businesses/{businessId}/services", business.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondRequest))
         )
         .andExpect(status().isCreated());
-
+    
         mockMvc.perform(
                 get("/api/v1/businesses/{businessId}/services", business.getId())
         )
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2))
-        .andExpect(jsonPath("$[0].name").value("General Consultation"))
-        .andExpect(jsonPath("$[1].name").value("Follow-up Consultation"));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.content[0].name")
+                .value("General Consultation"))
+        .andExpect(jsonPath("$.content[1].name")
+                .value("Follow-up Consultation"))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(1))
+        .andExpect(jsonPath("$.number").value(0))
+        .andExpect(jsonPath("$.size").value(20))
+        .andExpect(jsonPath("$.first").value(true))
+        .andExpect(jsonPath("$.last").value(true));
+    }
+
+    @Test
+    void shouldReturnEmptyPageWhenBusinessHasNoServices() throws Exception {
+        Business business = createTestBusiness();
+    
+        mockMvc.perform(
+                get("/api/v1/businesses/{businessId}/services", business.getId())
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(0))
+        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.totalPages").value(0))
+        .andExpect(jsonPath("$.number").value(0))
+        .andExpect(jsonPath("$.size").value(20))
+        .andExpect(jsonPath("$.first").value(true))
+        .andExpect(jsonPath("$.last").value(true));
+    }
+
+    @Test
+    void shouldPaginateServicesForBusiness() throws Exception {
+        Business business = createTestBusiness();
+    
+        for (int i = 1; i <= 3; i++) {
+            CreateServiceRequest request = new CreateServiceRequest();
+            request.setName("Service " + i);
+            request.setDescription("Service " + i + " description");
+            request.setDurationMinutes(30);
+    
+            mockMvc.perform(
+                    post("/api/v1/businesses/{businessId}/services", business.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))
+            )
+            .andExpect(status().isCreated());
+        }
+    
+        mockMvc.perform(
+                get("/api/v1/businesses/{businessId}/services", business.getId())
+                        .param("page", "0")
+                        .param("size", "2")
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.content[0].name").value("Service 1"))
+        .andExpect(jsonPath("$.content[1].name").value("Service 2"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.number").value(0))
+        .andExpect(jsonPath("$.size").value(2))
+        .andExpect(jsonPath("$.first").value(true))
+        .andExpect(jsonPath("$.last").value(false));
+    
+        mockMvc.perform(
+                get("/api/v1/businesses/{businessId}/services", business.getId())
+                        .param("page", "1")
+                        .param("size", "2")
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Service 3"))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.number").value(1))
+        .andExpect(jsonPath("$.size").value(2))
+        .andExpect(jsonPath("$.first").value(false))
+        .andExpect(jsonPath("$.last").value(true));
     }
 
     @Test
