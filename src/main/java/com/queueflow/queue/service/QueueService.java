@@ -16,6 +16,8 @@ import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.service.Service;
 import com.queueflow.service.ServiceRepository;
 import org.slf4j.Logger;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -215,9 +217,10 @@ public class QueueService {
     }
 
     @Transactional(readOnly = true)
-    public List<QueueResponse> getBusinessQueues(
+    public Page<QueueResponse> getBusinessQueues(
             Long businessId,
-            LocalDate queueDate) {
+            LocalDate queueDate,
+            Pageable pageable) {
 
         if (!businessRepository.existsById(businessId)) {
             throw new ResourceNotFoundException(
@@ -230,10 +233,12 @@ public class QueueService {
                 : LocalDate.now();
 
         return queueRepository
-                .findByBusinessIdAndQueueDate(businessId, date)
-                .stream()
-                .map(QueueResponse::from)
-                .toList();
+                .findByBusinessIdAndQueueDateOrderByIdAsc(
+                        businessId,
+                        date,
+                        pageable
+                )
+                .map(QueueResponse::from);
     }
 
     @Transactional

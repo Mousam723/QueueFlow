@@ -4,12 +4,13 @@ import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.queue.service.QueueService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -33,13 +34,18 @@ public class QueueController {
 
     @PreAuthorize("@authorizationService.canAccessBusiness(#businessId)")
     @GetMapping("/businesses/{businessId}/queues")
-    public List<QueueResponse> getBusinessQueues(
+    public Page<QueueResponse> getBusinessQueues(
             @PathVariable Long businessId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate date) {
+            LocalDate date,
+            Pageable pageable) {
 
-        return queueService.getBusinessQueues(businessId, date);
+        return queueService.getBusinessQueues(
+                businessId,
+                date,
+                pageable
+        );
     }
 
     @PreAuthorize("@authorizationService.canAccessQueue(#queueId)")

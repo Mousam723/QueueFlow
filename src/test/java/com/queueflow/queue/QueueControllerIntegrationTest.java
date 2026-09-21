@@ -566,11 +566,93 @@ class QueueControllerIntegrationTest {
                         )
         )
                 .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$", hasSize(2))
-                );
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
     }
 
+
+    @Test
+    void shouldPaginateQueuesForBusinessAndDate()
+            throws Exception {
+
+        Business business = createBusiness(
+                "queue-pagination@test.com"
+        );
+
+        Service serviceOne = createService(business);
+
+        Service serviceTwo = createService(business);
+
+        Service serviceThree = createService(business);
+
+        LocalDate queueDate =
+                LocalDate.of(2026, 8, 31);
+
+        createQueue(
+                business,
+                serviceOne,
+                queueDate
+        );
+
+        createQueue(
+                business,
+                serviceTwo,
+                queueDate
+        );
+
+        createQueue(
+                business,
+                serviceThree,
+                queueDate
+        );
+
+        mockMvc.perform(
+                get(
+                        "/api/v1/businesses/{businessId}/queues",
+                        business.getId()
+                )
+                        .param(
+                                "date",
+                                queueDate.toString()
+                        )
+                        .param("page", "0")
+                        .param("size", "2")
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(false));
+
+        mockMvc.perform(
+                get(
+                        "/api/v1/businesses/{businessId}/queues",
+                        business.getId()
+                )
+                        .param(
+                                "date",
+                                queueDate.toString()
+                        )
+                        .param("page", "1")
+                        .param("size", "2")
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(true));
+    }
 
     /*
      * ============================================================
