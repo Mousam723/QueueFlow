@@ -1,5 +1,7 @@
 package com.queueflow.businessstaff.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.queueflow.businessstaff.dto.AssignStaffRequest;
 import com.queueflow.businessstaff.dto.StaffResponse;
 import com.queueflow.businessstaff.service.BusinessStaffService;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/businesses/{businessId}/staff")
 public class BusinessStaffController {
 

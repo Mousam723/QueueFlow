@@ -1,5 +1,7 @@
 package com.queueflow.queue.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.dto.QueueResponse;
 import com.queueflow.queue.service.QueueService;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1")
 public class QueueController {
 

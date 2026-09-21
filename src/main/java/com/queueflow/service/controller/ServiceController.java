@@ -1,5 +1,7 @@
 package com.queueflow.service.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.queueflow.service.dto.CreateServiceRequest;
 import com.queueflow.service.dto.ServiceResponse;
 import com.queueflow.service.service.ServiceService;
@@ -14,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/businesses/{businessId}/services")
 public class ServiceController {
 

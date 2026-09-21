@@ -1,5 +1,7 @@
 package com.queueflow.appointment.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.queueflow.appointment.dto.AppointmentResponse;
 import com.queueflow.appointment.dto.CreateAppointmentRequest;
 import com.queueflow.appointment.dto.QueuePositionResponse;
@@ -13,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/appointments")
 public class AppointmentController {
 

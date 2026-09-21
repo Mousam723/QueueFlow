@@ -1,5 +1,7 @@
 package com.queueflow.business.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.queueflow.business.dto.BusinessResponse;
 import com.queueflow.business.dto.CreateBusinessRequest;
 import com.queueflow.business.service.BusinessService;
@@ -12,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/businesses")
 public class BusinessController {
 
