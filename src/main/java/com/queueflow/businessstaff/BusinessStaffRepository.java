@@ -16,4 +16,9 @@ public interface BusinessStaffRepository
             Long businessId,
             Pageable pageable
     );
+
+    Page<BusinessStaff> findByStaffIdOrderByCreatedAtAsc(
+            Long staffId,
+            Pageable pageable
+    );
 }

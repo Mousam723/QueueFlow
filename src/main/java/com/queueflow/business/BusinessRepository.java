@@ -6,5 +6,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BusinessRepository extends JpaRepository<Business, Long> {
 
-    Page<Business> findByOwnerIdOrderByIdAsc(Long ownerId, Pageable pageable);
+    Page<Business> findByOwnerIdOrderByIdAsc(
+            Long ownerId,
+            Pageable pageable
+    );
+
+    Page<Business> findAllByOrderByIdAsc(
+            Pageable pageable
+    );
+
+    Page<Business> findByStatusOrderByIdAsc(
+            BusinessStatus status,
+            Pageable pageable
+    );
 }

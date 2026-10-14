@@ -2,6 +2,11 @@ package com.queueflow.auth;
 
 import com.queueflow.auth.dto.RegisterRequest;
 import com.queueflow.auth.dto.RegisterResponse;
+import com.queueflow.appointment.AppointmentRepository;
+import com.queueflow.business.BusinessRepository;
+import com.queueflow.businessstaff.BusinessStaffRepository;
+import com.queueflow.queue.QueueRepository;
+import com.queueflow.service.ServiceRepository;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 import com.queueflow.user.UserRole;
@@ -40,10 +45,30 @@ class AuthControllerIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private BusinessRepository businessRepository;
+
+    @Autowired
+    private BusinessStaffRepository businessStaffRepository;
+
+    @Autowired
+    private ServiceRepository serviceRepository;
+
+    @Autowired
+    private QueueRepository queueRepository;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void cleanDatabase() {
+        appointmentRepository.deleteAll();
+        queueRepository.deleteAll();
+        serviceRepository.deleteAll();
+        businessStaffRepository.deleteAll();
+        businessRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -54,7 +79,8 @@ class AuthControllerIntegrationTest {
                 "John Doe",
                 "john@example.com",
                 "StrongPassword123",
-                "9876543210"
+                "9876543210",
+                UserRole.CUSTOMER
         );
 
         String response = mockMvc.perform(
@@ -117,7 +143,8 @@ class AuthControllerIntegrationTest {
                 "Another User",
                 "existing@example.com",
                 "StrongPassword123",
-                "8888888888"
+                "8888888888",
+                UserRole.CUSTOMER
         );
 
         mockMvc.perform(
@@ -136,7 +163,8 @@ class AuthControllerIntegrationTest {
                 "",
                 "not-an-email",
                 "short",
-                "123"
+                "123",
+                UserRole.CUSTOMER
         );
 
         mockMvc.perform(
@@ -155,7 +183,8 @@ class AuthControllerIntegrationTest {
                 "Password Test",
                 "password-test@example.com",
                 "StrongPassword123",
-                null
+                null,
+                UserRole.CUSTOMER
         );
 
         mockMvc.perform(
@@ -186,7 +215,8 @@ class AuthControllerIntegrationTest {
                 "Public Customer",
                 "public-customer@example.com",
                 "StrongPassword123",
-                null
+                null,
+                UserRole.CUSTOMER
         );
 
         mockMvc.perform(
@@ -213,7 +243,8 @@ class AuthControllerIntegrationTest {
                 "E2E Customer",
                 "e2e-customer@example.com",
                 "StrongPassword123",
-                "9876543210"
+                "9876543210",
+                UserRole.CUSTOMER
         );
     
         mockMvc.perform(
@@ -306,14 +337,16 @@ class AuthControllerIntegrationTest {
                 "First Customer",
                 "first-customer@example.com",
                 "StrongPassword123",
-                null
+                null,
+                UserRole.CUSTOMER
         );
     
         RegisterRequest secondCustomer = new RegisterRequest(
                 "Second Customer",
                 "second-customer@example.com",
                 "StrongPassword123",
-                null
+                null,
+                UserRole.CUSTOMER
         );
     
         mockMvc.perform(
@@ -373,4 +406,98 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isForbidden());
     }
     
+
+    @Test
+    void shouldRegisterBusinessOwner() throws Exception {
+        RegisterRequest request = new RegisterRequest(
+                "Business Owner",
+                "business-owner@example.com",
+                "StrongPassword123",
+                "9876543210",
+                UserRole.BUSINESS_OWNER
+        );
+
+        String response = mockMvc.perform(
+                post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").exists())
+                .andExpect(jsonPath("$.name").value("Business Owner"))
+                .andExpect(jsonPath("$.email").value("business-owner@example.com"))
+                .andExpect(jsonPath("$.role").value("BUSINESS_OWNER"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Long userId = objectMapper
+                .readTree(response)
+                .get("userId")
+                .asLong();
+
+        User user = userRepository.findById(userId).orElseThrow();
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                UserRole.BUSINESS_OWNER,
+                user.getRole()
+        );
+    }
+
+    @Test
+    void shouldRejectStaffRegistration() throws Exception {
+        RegisterRequest request = new RegisterRequest(
+                "Staff User",
+                "staff@example.com",
+                "StrongPassword123",
+                "9876543210",
+                UserRole.STAFF
+        );
+
+        mockMvc.perform(
+                post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectAdminRegistration() throws Exception {
+        RegisterRequest request = new RegisterRequest(
+                "Admin User",
+                "admin@example.com",
+                "StrongPassword123",
+                "9876543210",
+                UserRole.ADMIN
+        );
+
+        mockMvc.perform(
+                post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectRegistrationWithoutRole() throws Exception {
+        String request = """
+                {
+                    "name": "Missing Role",
+                    "email": "missing-role@example.com",
+                    "password": "StrongPassword123",
+                    "phone": "9876543210"
+                }
+                """;
+
+        mockMvc.perform(
+                post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)
+        )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
 }

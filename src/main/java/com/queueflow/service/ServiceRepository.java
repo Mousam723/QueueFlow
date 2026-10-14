@@ -10,4 +10,10 @@ public interface ServiceRepository extends JpaRepository<Service, Long> {
             Long businessId,
             Pageable pageable
     );
+
+    Page<Service> findByBusinessIdAndStatusOrderByIdAsc(
+            Long businessId,
+            ServiceStatus status,
+            Pageable pageable
+    );
 }

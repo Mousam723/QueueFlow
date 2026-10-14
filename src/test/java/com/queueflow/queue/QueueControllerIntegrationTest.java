@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.queueflow.business.Business;
 import com.queueflow.business.BusinessRepository;
+import com.queueflow.businessstaff.BusinessStaffRepository;
 import com.queueflow.business.BusinessStatus;
 import com.queueflow.queue.dto.CreateQueueRequest;
 import com.queueflow.queue.QueueRepository;
@@ -64,6 +65,9 @@ class QueueControllerIntegrationTest {
     private BusinessRepository businessRepository;
 
     @Autowired
+    private BusinessStaffRepository businessStaffRepository;
+
+    @Autowired
     private ServiceRepository serviceRepository;
 
     @Autowired
@@ -77,6 +81,7 @@ class QueueControllerIntegrationTest {
         appointmentRepository.deleteAll();
         queueRepository.deleteAll();
         serviceRepository.deleteAll();
+        businessStaffRepository.deleteAll();
         businessRepository.deleteAll();
         userRepository.deleteAll();
     }

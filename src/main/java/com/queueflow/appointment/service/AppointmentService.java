@@ -409,6 +409,19 @@ public Page<AppointmentResponse> getCustomerAppointments(
             .map(AppointmentResponse::from);
 }
 
+@Transactional(readOnly = true)
+public Page<AppointmentResponse> getBusinessAppointments(
+        Long businessId,
+        Pageable pageable
+) {
+    return appointmentRepository
+            .findByBusinessIdOrderByAppointmentDateDescCreatedAtDescIdDesc(
+                    businessId,
+                    pageable
+            )
+            .map(AppointmentResponse::from);
+}
+
 private String generateRequestFingerprint(
     CreateAppointmentRequest request
 ) {

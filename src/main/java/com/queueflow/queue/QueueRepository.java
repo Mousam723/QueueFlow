@@ -1,6 +1,7 @@
 package com.queueflow.queue;
 
 import jakarta.persistence.LockModeType;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,6 +23,20 @@ public interface QueueRepository extends JpaRepository<Queue, Long> {
             Long businessId,
             LocalDate queueDate,
             Pageable pageable
+    );
+
+    Page<Queue> findByBusinessIdAndQueueDateAndStatusOrderByIdAsc(
+            Long businessId,
+            LocalDate queueDate,
+            QueueStatus status,
+            Pageable pageable
+    );
+
+    Optional<Queue> findByBusinessIdAndServiceIdAndQueueDateAndStatus(
+            Long businessId,
+            Long serviceId,
+            LocalDate queueDate,
+            QueueStatus status
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

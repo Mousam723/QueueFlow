@@ -22,6 +22,11 @@ public interface AppointmentRepository
             Pageable pageable
     );
 
+    Page<Appointment> findByBusinessIdOrderByAppointmentDateDescCreatedAtDescIdDesc(
+            Long businessId,
+            Pageable pageable
+    );
+
     List<Appointment> findByQueueIdAndStatusOrderByTokenNumberAsc(
             Long queueId,
             AppointmentStatus status

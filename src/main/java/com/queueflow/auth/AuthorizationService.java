@@ -93,6 +93,11 @@ public class AuthorizationService {
                 .orElse(false);
     }
 
+    public boolean isBusinessOwnerRole() {
+        if (!securityEnabled) return true;
+        return hasRole(UserRole.BUSINESS_OWNER);
+    }
+
     public boolean isBusinessOwnerId(Long ownerId) {
         if (!securityEnabled) {
             return true;

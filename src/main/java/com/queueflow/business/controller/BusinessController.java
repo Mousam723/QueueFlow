@@ -1,17 +1,16 @@
 package com.queueflow.business.controller;
 
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-
+import com.queueflow.auth.AuthorizationService;
 import com.queueflow.business.dto.BusinessResponse;
 import com.queueflow.business.dto.CreateBusinessRequest;
 import com.queueflow.business.service.BusinessService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @SecurityRequirement(name = "bearerAuth")
@@ -19,9 +18,14 @@ import org.springframework.data.domain.Pageable;
 public class BusinessController {
 
     private final BusinessService businessService;
+    private final AuthorizationService authorizationService;
 
-    public BusinessController(BusinessService businessService) {
+    public BusinessController(
+            BusinessService businessService,
+            AuthorizationService authorizationService
+    ) {
         this.businessService = businessService;
+        this.authorizationService = authorizationService;
     }
 
     @PreAuthorize("@authorizationService.canCreateBusiness(#request.ownerId)")
@@ -50,6 +54,25 @@ public class BusinessController {
             Pageable pageable
     ) {
         return businessService.getBusinessesByOwner(ownerId, pageable);
+    }
+
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'STAFF', 'ADMIN')")
+    @GetMapping("/mine")
+    @ResponseStatus(HttpStatus.OK)
+    public Page<BusinessResponse> getMyBusinesses(
+            Pageable pageable
+    ) {
+        Long userId = authorizationService.getAuthenticatedUserId();
+
+        if (authorizationService.isAdmin()) {
+            return businessService.getAllBusinesses(pageable);
+        }
+
+        if (authorizationService.isBusinessOwnerRole()) {
+            return businessService.getBusinessesByOwner(userId, pageable);
+        }
+
+        return businessService.getBusinessesForStaff(userId, pageable);
     }
 
     @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")

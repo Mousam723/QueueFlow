@@ -5,6 +5,10 @@ import tools.jackson.databind.ObjectMapper;
 import com.queueflow.business.Business;
 import com.queueflow.business.BusinessRepository;
 import com.queueflow.business.BusinessStatus;
+
+import com.queueflow.service.Service;
+
+import com.queueflow.service.ServiceRepository;
 import com.queueflow.service.dto.CreateServiceRequest;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
@@ -19,6 +23,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+
+import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -43,7 +51,7 @@ class ServiceControllerIntegrationTest {
 
         User owner = new User();
         owner.setName("Test Owner");
-        owner.setEmail("service-owner@test.com");
+        owner.setEmail("service-owner-" + UUID.randomUUID() + "@test.com");
         owner.setPhone("9999999999");
         owner.setPasswordHash("test-password");
         owner.setRole(UserRole.BUSINESS_OWNER);
@@ -248,4 +256,233 @@ class ServiceControllerIntegrationTest {
         .andExpect(jsonPath("$.message")
                 .value("Business with id 999999 was not found"));
     }
+
+    @Autowired
+    private ServiceRepository serviceRepository;
+
+    @Test
+    void shouldDeactivateServiceSuccessfully() throws Exception {
+        Business business = createTestBusiness();
+
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("General Consultation");
+        request.setDescription("Testing");
+        request.setDurationMinutes(30);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/services", business.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+        long serviceId = objectMapper.readTree(response)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(serviceId))
+        .andExpect(jsonPath("$.businessId").value(business.getId()))
+        .andExpect(jsonPath("$.status").value("INACTIVE"));
+
+        Service service = serviceRepository.findById(serviceId).orElseThrow();
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ServiceStatus.INACTIVE,
+                service.getStatus()
+        );
+    }
+
+    @Test
+    void shouldReactivateServiceSuccessfully() throws Exception {
+        Business business = createTestBusiness();
+
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("General Consultation");
+        request.setDescription("Testing");
+        request.setDurationMinutes(30);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/services", business.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+        long serviceId = objectMapper.readTree(response)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("INACTIVE"));
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/reactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(serviceId))
+        .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void shouldReturn409WhenDeactivatingAlreadyInactiveService() throws Exception {
+        Business business = createTestBusiness();
+
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("General Consultation");
+        request.setDescription("Testing");
+        request.setDurationMinutes(30);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/services", business.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+        long serviceId = objectMapper.readTree(response)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isOk());
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.status").value(409))
+        .andExpect(jsonPath("$.error").value("CONFLICT"));
+    }
+
+    @Test
+    void shouldReturn409WhenReactivatingAlreadyActiveService() throws Exception {
+        Business business = createTestBusiness();
+
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("General Consultation");
+        request.setDescription("Testing");
+        request.setDurationMinutes(30);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/services", business.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+        long serviceId = objectMapper.readTree(response)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/reactivate",
+                        business.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.status").value(409))
+        .andExpect(jsonPath("$.error").value("CONFLICT"));
+    }
+
+    @Test
+    void shouldReturn404WhenServiceDoesNotExist() throws Exception {
+        Business business = createTestBusiness();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        business.getId(),
+                        999999L
+                )
+        )
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.error").value("RESOURCE_NOT_FOUND"))
+        .andExpect(jsonPath("$.message")
+                .value("Service with id 999999 was not found"));
+    }
+
+    @Test
+    void shouldReturn400WhenServiceBelongsToAnotherBusiness() throws Exception {
+        Business firstBusiness = createTestBusiness();
+
+        CreateServiceRequest request = new CreateServiceRequest();
+        request.setName("General Consultation");
+        request.setDescription("Testing");
+        request.setDurationMinutes(30);
+
+        String response = mockMvc.perform(
+                post("/api/v1/businesses/{businessId}/services", firstBusiness.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+        long serviceId = objectMapper.readTree(response)
+                .get("id")
+                .asLong();
+
+        Business secondBusiness = createTestBusiness();
+
+        mockMvc.perform(
+                patch(
+                        "/api/v1/businesses/{businessId}/services/{serviceId}/deactivate",
+                        secondBusiness.getId(),
+                        serviceId
+                )
+        )
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+        .andExpect(jsonPath("$.message")
+                .value("Service does not belong to business with id "
+                        + secondBusiness.getId()));
+    }
+
 }

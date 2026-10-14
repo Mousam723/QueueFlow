@@ -99,6 +99,19 @@ public AppointmentResponse getAppointment(
     return appointmentService.getAppointment(appointmentId);
 }
 
+@GetMapping("/businesses/{businessId}")
+@ResponseStatus(HttpStatus.OK)
+@PreAuthorize("@authorizationService.canAccessBusiness(#businessId)")
+public Page<AppointmentResponse> getBusinessAppointments(
+        @PathVariable Long businessId,
+        Pageable pageable
+) {
+    return appointmentService.getBusinessAppointments(
+            businessId,
+            pageable
+    );
+}
+
 @GetMapping("/customers/{customerId}")
 @ResponseStatus(HttpStatus.OK)
 @PreAuthorize("@authorizationService.canAccessCustomerAppointments(#customerId)")

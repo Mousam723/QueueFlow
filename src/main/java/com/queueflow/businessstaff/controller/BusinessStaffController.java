@@ -37,6 +37,19 @@ public class BusinessStaffController {
     }
 
     @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
+    @GetMapping("/available")
+    @ResponseStatus(HttpStatus.OK)
+    public Page<StaffResponse> getAvailableStaff(
+            @PathVariable Long businessId,
+            Pageable pageable
+    ) {
+        return businessStaffService.getAvailableStaff(
+                businessId,
+                pageable
+        );
+    }
+
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
     public Page<StaffResponse> getBusinessStaff(

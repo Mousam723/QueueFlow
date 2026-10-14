@@ -44,4 +44,21 @@ public class ServiceController {
 
         return serviceService.getServicesByBusiness(businessId, pageable);
     }
+
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
+    @PatchMapping("/{serviceId}/deactivate")
+    public ServiceResponse deactivateService(
+            @PathVariable Long businessId,
+            @PathVariable Long serviceId) {
+        return serviceService.deactivateService(businessId, serviceId);
+    }
+
+    @PreAuthorize("@authorizationService.isAdmin() || @authorizationService.isBusinessOwner(#businessId)")
+    @PatchMapping("/{serviceId}/reactivate")
+    public ServiceResponse reactivateService(
+            @PathVariable Long businessId,
+            @PathVariable Long serviceId) {
+        return serviceService.reactivateService(businessId, serviceId);
+    }
+
 }

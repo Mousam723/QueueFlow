@@ -79,6 +79,22 @@ public class BusinessStaffService {
     }
 
     @Transactional(readOnly = true)
+    public Page<StaffResponse> getAvailableStaff(
+            Long businessId,
+            Pageable pageable
+    ) {
+        if (!businessRepository.existsById(businessId)) {
+            throw new ResourceNotFoundException(
+                    "Business with id " + businessId + " was not found"
+            );
+        }
+
+        return userRepository
+                .findByRoleOrderByNameAsc(UserRole.STAFF, pageable)
+                .map(StaffResponse::fromUser);
+    }
+
+    @Transactional(readOnly = true)
     public Page<StaffResponse> getBusinessStaff(
             Long businessId,
             Pageable pageable

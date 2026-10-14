@@ -11,6 +11,16 @@ public class StaffResponse {
     private String email;
     private String phone;
 
+    public static StaffResponse fromUser(User user) {
+        StaffResponse response = new StaffResponse();
+        response.id = null;
+        response.staffId = user.getId();
+        response.name = user.getName();
+        response.email = user.getEmail();
+        response.phone = user.getPhone();
+        return response;
+    }
+
     public static StaffResponse from(BusinessStaff businessStaff) {
         User staff = businessStaff.getStaff();
 

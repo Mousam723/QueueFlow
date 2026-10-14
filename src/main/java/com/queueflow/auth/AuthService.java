@@ -2,6 +2,7 @@ package com.queueflow.auth;
 
 import com.queueflow.auth.dto.RegisterRequest;
 import com.queueflow.auth.dto.RegisterResponse;
+import com.queueflow.common.exception.BadRequestException;
 import com.queueflow.common.exception.ConflictException;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
@@ -45,8 +46,14 @@ public class AuthService {
                 passwordEncoder.encode(request.password())
         );
 
-        // Public registration can only create CUSTOMER accounts.
-        user.setRole(UserRole.CUSTOMER);
+        if (request.role() != UserRole.CUSTOMER
+                && request.role() != UserRole.BUSINESS_OWNER) {
+            throw new BadRequestException(
+                "Public registration is only available for CUSTOMER and BUSINESS_OWNER accounts"
+            );
+        }
+
+        user.setRole(request.role());
 
         LocalDateTime now = LocalDateTime.now();
         user.setCreatedAt(now);

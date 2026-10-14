@@ -5,29 +5,37 @@ import com.queueflow.business.BusinessRepository;
 import com.queueflow.business.BusinessStatus;
 import com.queueflow.business.dto.BusinessResponse;
 import com.queueflow.business.dto.CreateBusinessRequest;
+import com.queueflow.businessstaff.BusinessStaff;
+import com.queueflow.businessstaff.BusinessStaffRepository;
 import com.queueflow.common.exception.ConflictException;
 import com.queueflow.common.exception.ResourceNotFoundException;
 import com.queueflow.user.User;
 import com.queueflow.user.UserRepository;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class BusinessService {
 
     private final BusinessRepository businessRepository;
+
     private final UserRepository userRepository;
+
+    private final BusinessStaffRepository businessStaffRepository;
 
     public BusinessService(
             BusinessRepository businessRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            BusinessStaffRepository businessStaffRepository) {
+
         this.businessRepository = businessRepository;
+
         this.userRepository = userRepository;
+
+        this.businessStaffRepository = businessStaffRepository;
     }
 
     @Transactional
@@ -36,7 +44,9 @@ public class BusinessService {
         User owner = userRepository.findById(request.getOwnerId())
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                "Business owner with id " + request.getOwnerId() + " was not found"));
+                                "Business owner with id "
+                                        + request.getOwnerId()
+                                        + " was not found"));
 
         Business business = new Business();
 
@@ -53,47 +63,78 @@ public class BusinessService {
     }
 
     @Transactional(readOnly = true)
-public BusinessResponse getBusiness(Long businessId) {
-    Business business = businessRepository.findById(businessId)
-            .orElseThrow(() ->
-                    new ResourceNotFoundException(
-                            "Business with id " + businessId + " was not found"
-                    ));
+    public BusinessResponse getBusiness(Long businessId) {
 
-    return BusinessResponse.from(business);
-}
+        Business business = businessRepository.findById(businessId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Business with id " + businessId
+                                        + " was not found"));
 
-@Transactional(readOnly = true)
-public Page<BusinessResponse> getBusinessesByOwner(Long ownerId,Pageable pageable) {
-    if (!userRepository.existsById(ownerId)) {
-        throw new ResourceNotFoundException(
-                "Business owner with id " + ownerId + " was not found"
-        );
+        return BusinessResponse.from(business);
     }
 
-    return businessRepository.findByOwnerIdOrderByIdAsc(ownerId, pageable)
-        .map(BusinessResponse::from);
-}
+    @Transactional(readOnly = true)
+    public Page<BusinessResponse> getBusinessesByOwner(
+            Long ownerId,
+            Pageable pageable) {
 
-@Transactional
-public BusinessResponse deactivateBusiness(Long businessId) {
-    Business business = businessRepository.findById(businessId)
-            .orElseThrow(() ->
-                    new ResourceNotFoundException(
-                            "Business with id " + businessId + " was not found"
-                    ));
+        if (!userRepository.existsById(ownerId)) {
+            throw new ResourceNotFoundException(
+                    "Business owner with id " + ownerId
+                            + " was not found"
+            );
+        }
 
-    if (business.getStatus() == BusinessStatus.INACTIVE) {
-        throw new ConflictException(
-                "Business with id " + businessId + " is already inactive"
-        );
+        return businessRepository
+                .findByOwnerIdOrderByIdAsc(ownerId, pageable)
+                .map(BusinessResponse::from);
     }
 
-    business.setStatus(BusinessStatus.INACTIVE);
+    @Transactional(readOnly = true)
+    public Page<BusinessResponse> getAllBusinesses(Pageable pageable) {
+        return businessRepository.findAllByOrderByIdAsc(pageable)
+                .map(BusinessResponse::from);
+    }
 
-    Business savedBusiness = businessRepository.save(business);
+    @Transactional(readOnly = true)
+    public Page<BusinessResponse> getBusinessesForStaff(
+            Long staffId,
+            Pageable pageable) {
 
-    return BusinessResponse.from(savedBusiness);
-}
+        if (!userRepository.existsById(staffId)) {
+            throw new ResourceNotFoundException(
+                    "Staff user with id " + staffId
+                            + " was not found"
+            );
+        }
 
+        return businessStaffRepository
+                .findByStaffIdOrderByCreatedAtAsc(staffId, pageable)
+                .map(BusinessStaff::getBusiness)
+                .map(BusinessResponse::from);
+    }
+
+    @Transactional
+    public BusinessResponse deactivateBusiness(Long businessId) {
+
+        Business business = businessRepository.findById(businessId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Business with id " + businessId
+                                        + " was not found"));
+
+        if (business.getStatus() == BusinessStatus.INACTIVE) {
+            throw new ConflictException(
+                    "Business with id " + businessId
+                            + " is already inactive"
+            );
+        }
+
+        business.setStatus(BusinessStatus.INACTIVE);
+
+        Business savedBusiness = businessRepository.save(business);
+
+        return BusinessResponse.from(savedBusiness);
+    }
 }

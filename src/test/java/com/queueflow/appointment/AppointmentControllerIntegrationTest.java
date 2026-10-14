@@ -3,6 +3,7 @@ package com.queueflow.appointment;
 import com.queueflow.appointment.dto.CreateAppointmentRequest;
 import com.queueflow.business.Business;
 import com.queueflow.business.BusinessRepository;
+import com.queueflow.businessstaff.BusinessStaffRepository;
 import com.queueflow.business.BusinessStatus;
 import com.queueflow.queue.Queue;
 import com.queueflow.queue.QueueRepository;
@@ -62,6 +63,9 @@ class AppointmentControllerIntegrationTest {
     private BusinessRepository businessRepository;
 
     @Autowired
+    private BusinessStaffRepository businessStaffRepository;
+
+    @Autowired
     private ServiceRepository serviceRepository;
 
     @Autowired
@@ -75,6 +79,7 @@ class AppointmentControllerIntegrationTest {
         appointmentRepository.deleteAll();
         queueRepository.deleteAll();
         serviceRepository.deleteAll();
+        businessStaffRepository.deleteAll();
         businessRepository.deleteAll();
         userRepository.deleteAll();
     }
