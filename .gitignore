@@ -1,31 +1,12 @@
-# Build
-target/
-*.class
-
-# IDE
-.idea/
-.vscode/
-*.iml
-
-# OS
-.DS_Store
-
-# Logs
-*.log
-
-# Environment / secrets
+# Local secrets and environment configuration
 .env
 .env.*
-application-local.properties
+!.env.example
+
+# Build outputs
+target/
+dist/
+node_modules/
+
 # macOS
 .DS_Store
-
-# IntelliJ
-.idea/
-*.iml
-
-# VS Code
-.vscode/
-
-# Maven
-target/
